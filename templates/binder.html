@@ -4,41 +4,211 @@
 
 {% block styles %}
 <style>
-    .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; padding: 15px; }
-    .card-slot { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white; text-align: center; position: relative; aspect-ratio: 2.5/3.5; }
-    .card-info { padding: 5px; font-size: 0.8rem; background: #f8f9fa; position: absolute; bottom: 0; width: 100%; }
-    .price-badge { position: absolute; top: 5px; right: 5px; background: rgba(25, 135, 84, 0.9); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
-    .placeholder-art { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #aaa; font-size: 2rem; }
+    .binder-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
+        gap: 20px; 
+        padding: 20px; 
+    }
+    .card-slot { 
+        border: none;
+        border-radius: 10px; 
+        overflow: hidden; 
+        background: transparent; 
+        text-align: center; 
+        position: relative; 
+        aspect-ratio: 2.5/3.5; 
+        transition: transform 0.2s;
+    }
+    .card-slot:hover {
+        transform: translateY(-5px);
+        z-index: 10;
+    }
+    .card-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    /* Loading Placeholder Animation */
+    .skeleton-loader {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+        border-radius: 10px;
+        position: absolute;
+        top: 0; left: 0;
+    }
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    
+    .price-badge { 
+        position: absolute; 
+        bottom: 10px; 
+        right: 10px; 
+        background: rgba(0, 0, 0, 0.8); 
+        color: #2ecc71; 
+        padding: 4px 8px; 
+        border-radius: 6px; 
+        font-size: 0.9rem; 
+        font-weight: bold; 
+        backdrop-filter: blur(2px);
+    }
+    .info-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+        color: white;
+        padding: 40px 10px 10px 10px;
+        text-align: left;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+    .card-slot:hover .info-overlay {
+        opacity: 1;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid p-0">
-    <nav class="navbar navbar-dark bg-dark mb-0">
+    <nav class="navbar navbar-dark bg-dark mb-0 shadow-sm">
         <div class="container-fluid">
             <span class="navbar-brand h1 mb-0">{{ owner.username }}'s Binder</span>
-            <a href="{{ url_for('user_storefront', username=owner.username) }}" class="btn btn-sm btn-outline-light">List View</a>
+            <div>
+                <span class="badge bg-secondary me-2">{{ inventory|length }} Cards</span>
+                <a href="{{ url_for('user_storefront', username=owner.username) }}" class="btn btn-sm btn-outline-light">List View</a>
+            </div>
         </div>
     </nav>
 
     <div class="binder-grid">
         {% for card in inventory %}
-        <div class="card-slot shadow-sm">
+        <div class="card-slot" 
+             data-game="{{ card.game }}" 
+             data-name="{{ card.card_name }}" 
+             data-set="{{ card.set_name }}" 
+             data-number="{{ card.card_number }}">
+            
+            <!-- Loader -->
+            <div class="skeleton-loader"></div>
+            
+            <!-- Actual Image (Hidden until loaded) -->
+            <img class="card-image d-none" alt="{{ card.card_name }}" loading="lazy">
+            
+            <!-- Info Overlay (Hover) -->
+            <div class="info-overlay">
+                <div class="fw-bold text-truncate">{{ card.card_name }}</div>
+                <div class="small opacity-75">{{ card.set_name }} #{{ card.card_number }}</div>
+                <div class="badge bg-light text-dark mt-1" style="font-size:0.7em">{{ card.condition }} {{ card.finish }}</div>
+            </div>
+
             {% if show_prices %}
             <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
             {% endif %}
-            
-            <div class="placeholder-art">
-                {% if 'Magic' in card.game %}🔮{% elif 'Pokemon' in card.game %}⚡{% else %}🃏{% endif %}
-            </div>
-            
-            <div class="card-info border-top">
-                <div class="fw-bold text-truncate">{{ card.card_name }}</div>
-                <div class="text-muted small">{{ card.set_name }}</div>
-                <div class="badge bg-secondary text-wrap" style="font-size:0.6rem">{{ card.condition }} {{ card.finish }}</div>
-            </div>
         </div>
         {% endfor %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const cards = document.querySelectorAll('.card-slot');
+        
+        cards.forEach(card => {
+            const game = card.dataset.game.toLowerCase();
+            const name = card.dataset.name;
+            const set = card.dataset.set;
+            const number = card.dataset.number;
+            const imgEl = card.querySelector('img');
+            const loader = card.querySelector('.skeleton-loader');
+
+            let apiUrl = "";
+
+            // --- MAGIC: THE GATHERING STRATEGY ---
+            if (game.includes('magic')) {
+                // Scryfall Fuzzy Search (Most reliable without exact set codes)
+                apiUrl = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}&format=image`;
+                // Optimization: If we had Set Code, we would use: 
+                // `https://api.scryfall.com/cards/${set_code}/${number}?format=image`
+            }
+            
+            // --- POKEMON STRATEGY ---
+            else if (game.includes('pokemon')) {
+                // Pokemon images are hosted by TCGDex. 
+                // We construct a query URL. Note: TCGDex uses set-ids which are hard to guess.
+                // Fallback: Use a generic card search proxy or direct image if known.
+                // For this MVP, we use a specialized proxy or fuzzy finder.
+                // Let's use a public cached image repo if possible, or TCGDex API.
+                
+                // Strategy: Try to hit the image directly via TCGPlayer syntax or similar
+                // Actually, the most reliable free one is `images.pokemontcg.io`.
+                // However, it requires Set IDs (e.g., 'swsh1'). 
+                // Since we only have Set Names ("Sword and Shield"), we will use a visual search placeholder
+                // or just default to the card back if we can't find it easily.
+                
+                // Better approach for v1: Use a generic query
+                // We will try to fetch the card data first.
+                fetch(`https://api.tcgdex.net/v2/en/cards?name=${encodeURIComponent(name)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if(data && data.length > 0) {
+                            // Find the one that matches the image url
+                            // TCGDex returns images with /high.webp
+                            const match = data.find(c => c.image) || data[0];
+                            if(match && match.image) {
+                                loadImage(imgEl, loader, match.image + "/high.webp");
+                            } else {
+                                loadFallback(imgEl, loader);
+                            }
+                        } else {
+                            loadFallback(imgEl, loader);
+                        }
+                    })
+                    .catch(() => loadFallback(imgEl, loader));
+                return; // Exit here because fetch is async
+            } 
+            
+            // --- ONE PIECE STRATEGY ---
+            else if (game.includes('one piece')) {
+                // One Piece is tricky. No great public API yet.
+                // We will use a generic placeholder or a search link.
+                loadFallback(imgEl, loader);
+                return;
+            }
+
+            // Execute Magic/Other loads
+            if (apiUrl) {
+                loadImage(imgEl, loader, apiUrl);
+            } else {
+                loadFallback(imgEl, loader);
+            }
+        });
+
+        function loadImage(img, loader, src) {
+            img.src = src;
+            img.onload = () => {
+                loader.classList.add('d-none');
+                img.classList.remove('d-none');
+            };
+            img.onerror = () => loadFallback(img, loader);
+        }
+
+        function loadFallback(img, loader) {
+            // Card Back Image
+            img.src = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg"; 
+            loader.classList.add('d-none');
+            img.classList.remove('d-none');
+        }
+    });
+</script>
 {% endblock %}
