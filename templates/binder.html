@@ -29,9 +29,10 @@
     .card-image {
         width: 100%;
         height: 100%;
-        object-fit: contain; /* Ensures the whole card is visible */
+        object-fit: contain;
         position: relative;
         z-index: 1;
+        transition: opacity 0.3s;
     }
     /* Loading Placeholder Animation */
     .skeleton-loader {
@@ -98,21 +99,16 @@
              data-set="{{ card.set_name }}" 
              data-number="{{ card.card_number }}">
             
-            <!-- Price (Always Visible) -->
             {% if show_prices %}
             <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
             {% endif %}
 
-            <!-- Loader -->
             <div class="skeleton-loader"></div>
-            
-            <!-- Image -->
             <img class="card-image d-none" alt="{{ card.card_name }}" loading="lazy">
             
-            <!-- Info (Always Visible at bottom) -->
             <div class="info-overlay">
                 <div class="fw-bold text-truncate" style="font-size: 0.9rem;">{{ card.card_name }}</div>
-                <div class="small text-muted" style="font-size: 0.75rem;">{{ card.set_name }} • {{ card.condition }}</div>
+                <div class="small text-muted" style="font-size: 0.75rem;">{{ card.set_name }}</div>
             </div>
         </div>
         {% endfor %}
@@ -132,33 +128,44 @@
             const imgEl = card.querySelector('img');
             const loader = card.querySelector('.skeleton-loader');
 
-            // Log for debugging
-            // console.log(`Processing: ${name} (${game})`);
-
-            let apiUrl = "";
-
-            // --- MAGIC: THE GATHERING STRATEGY ---
+            // --- MAGIC: THE GATHERING ---
             if (game.includes('magic') || game.includes('mtg')) {
-                apiUrl = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}&format=image`;
-                loadImage(imgEl, loader, apiUrl);
+                // FETCH JSON FIRST (Fixes CORB)
+                // We ask for the data object, not the image direct
+                const apiUrl = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`;
+                
+                fetch(apiUrl)
+                    .then(r => {
+                        if (!r.ok) throw new Error("Scryfall 404");
+                        return r.json();
+                    })
+                    .then(data => {
+                        if (data.image_uris && data.image_uris.normal) {
+                            loadImage(imgEl, loader, data.image_uris.normal);
+                        } else if (data.card_faces && data.card_faces[0].image_uris) {
+                            // Handle double-faced cards
+                            loadImage(imgEl, loader, data.card_faces[0].image_uris.normal);
+                        } else {
+                            loadFallback(imgEl, loader, 'magic');
+                        }
+                    })
+                    .catch(e => {
+                        console.warn("MTG Fetch Error:", name, e);
+                        loadFallback(imgEl, loader, 'magic');
+                    });
             }
             
-            // --- POKEMON STRATEGY ---
+            // --- POKEMON ---
             else if (game.includes('pokemon') || game.includes('pkmn') || game.includes('ptcg')) {
-                // Remove variants like "(Holo)" for better search results
                 const cleanName = name.split('(')[0].trim();
+                const query = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"&pageSize=1`;
                 
-                fetch(`https://api.tcgdex.net/v2/en/cards?name=${encodeURIComponent(cleanName)}`)
+                fetch(query)
                     .then(r => r.json())
                     .then(data => {
-                        if(data && data.length > 0) {
-                            // Try to find one with an image
-                            const match = data.find(c => c.image) || data[0];
-                            if(match && match.image) {
-                                loadImage(imgEl, loader, match.image + "/high.webp");
-                            } else {
-                                loadFallback(imgEl, loader, 'pokemon');
-                            }
+                        if(data && data.data && data.data.length > 0) {
+                            const imgUrl = data.data[0].images.small;
+                            loadImage(imgEl, loader, imgUrl);
                         } else {
                             loadFallback(imgEl, loader, 'pokemon');
                         }
@@ -169,15 +176,14 @@
                     });
             } 
             
-            // --- ONE PIECE STRATEGY ---
+            // --- ONE PIECE ---
             else if (game.includes('one') || game.includes('piece') || game.includes('opcg')) {
-                // One Piece API is limited, using fallback for now
+                // Fallback immediately for One Piece to avoid stuck loaders
                 loadFallback(imgEl, loader, 'onepiece');
             }
 
-            // --- UNKNOWN GAME ---
+            // --- UNKNOWN ---
             else {
-                // Try Scryfall anyway if it looks vaguely Magic-like, otherwise fallback
                 loadFallback(imgEl, loader, 'default');
             }
         });
@@ -189,25 +195,21 @@
                 img.classList.remove('d-none');
             };
             img.onerror = () => {
-                console.warn("Failed to load image:", src);
+                // If the specific image URL fails (rare), show fallback
                 loadFallback(img, loader, 'default');
             };
         }
 
         function loadFallback(img, loader, type) {
-            // Specific card backs for realism
-            let backSrc = "";
+            let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
             if (type === 'pokemon') {
                 backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
             } else if (type === 'onepiece') {
-                backSrc = "https://en.onepiece-cardgame.com/images/common/card_back.jpg"; // Placeholder
-            } else {
-                // Default to Magic
-                backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
+                backSrc = "https://en.onepiece-cardgame.com/images/common/card_back.jpg";
             }
-
+            
             img.src = backSrc;
-            img.style.opacity = "0.5"; // Dim the card back so text is readable
+            img.style.opacity = "0.3"; 
             loader.classList.add('d-none');
             img.classList.remove('d-none');
         }
