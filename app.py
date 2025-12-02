@@ -1,0 +1,261 @@
+import os
+import pandas as pd
+from datetime import datetime
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+
+app = Flask(__name__)
+
+# --- Configuration ---
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_key')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///inventory.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# --- Database Models ---
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    cards = db.relationship('Card', backref='owner', lazy=True)
+    settings = db.relationship('Settings', backref='owner', uselist=False)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+class Settings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    show_prices = db.Column(db.Boolean, default=False)
+
+class Card(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    game = db.Column(db.String(50), nullable=False)
+    set_name = db.Column(db.String(100), nullable=False)
+    card_name = db.Column(db.String(150), nullable=False)
+    card_number = db.Column(db.String(50))
+    condition = db.Column(db.String(20), default='NM')
+    price = db.Column(db.Float, default=0.0)
+    quantity = db.Column(db.Integer, default=1)
+    finish = db.Column(db.String(50), default='Normal')
+    variant = db.Column(db.String(100))
+    location = db.Column(db.String(100))
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+
+with app.app_context():
+    db.create_all()
+
+# --- Helper Functions ---
+
+def get_user_settings(user_id):
+    settings = Settings.query.filter_by(user_id=user_id).first()
+    if not settings:
+        settings = Settings(user_id=user_id, show_prices=False)
+        db.session.add(settings)
+        db.session.commit()
+    return settings
+
+# --- Routes ---
+
+@app.route('/')
+def index():
+    users = User.query.all()
+    return render_template('landing.html', users=users)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('admin'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username').lower()
+        password = request.form.get('password')
+        
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists.')
+            return redirect(url_for('register'))
+            
+        new_user = User(username=username)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        
+        login_user(new_user)
+        return redirect(url_for('admin'))
+        
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('admin'))
+
+    if request.method == 'POST':
+        username = request.form.get('username').lower()
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user)
+            return redirect(url_for('admin'))
+            
+        flash('Invalid username or password')
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html', user=current_user)
+
+# --- PUBLIC STOREFRONTS ---
+
+@app.route('/u/<username>')
+def user_storefront(username):
+    user = User.query.filter_by(username=username.lower()).first_or_404()
+    settings = get_user_settings(user.id)
+    # Only show in-stock items
+    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).all()
+    return render_template('index.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
+
+@app.route('/u/<username>/binder')
+def user_binder(username):
+    user = User.query.filter_by(username=username.lower()).first_or_404()
+    settings = get_user_settings(user.id)
+    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).all()
+    return render_template('binder.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
+
+@app.route('/u/<username>/qr')
+def user_qr(username):
+    user = User.query.filter_by(username=username.lower()).first_or_404()
+    return render_template('qr.html', owner=user)
+
+@app.route('/trade')
+def trade_tool():
+    users = User.query.all()
+    return render_template('trade.html', users=users)
+
+# --- API ENDPOINTS ---
+
+@app.route('/api/inventory/<username>')
+def api_inventory(username):
+    user = User.query.filter_by(username=username.lower()).first_or_404()
+    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).all()
+    
+    data = []
+    for card in inventory:
+        data.append({
+            'id': card.id,
+            'card_name': card.card_name,
+            'set_name': card.set_name,
+            'price': card.price,
+            'quantity': card.quantity,
+            'condition': card.condition,
+            'finish': card.finish,
+            'variant': card.variant
+        })
+    return jsonify(data)
+
+# --- ADMIN PANEL ---
+
+@app.route('/admin')
+@login_required
+def admin():
+    settings = get_user_settings(current_user.id)
+    inventory = Card.query.filter_by(user_id=current_user.id).order_by(Card.id.desc()).all()
+    return render_template('admin.html', inventory=inventory, settings=settings)
+
+@app.route('/update_settings', methods=['POST'])
+@login_required
+def update_settings():
+    settings = get_user_settings(current_user.id)
+    show_prices = request.form.get('show_prices') == 'on'
+    settings.show_prices = show_prices
+    db.session.commit()
+    flash(f"Public pricing visibility set to: {show_prices}")
+    return redirect(url_for('admin'))
+
+@app.route('/upload', methods=['POST'])
+@login_required
+def upload_csv():
+    if 'file' not in request.files: return redirect(url_for('admin'))
+    file = request.files['file']
+    if file.filename == '': return redirect(url_for('admin'))
+
+    if file:
+        try:
+            df = pd.read_csv(file)
+            def get_val(row, keys, default=None):
+                for k in keys:
+                    if k in row: return row[k] if pd.notna(row[k]) else default
+                return default
+
+            count = 0
+            for _, row in df.iterrows():
+                new_card = Card(
+                    user_id = current_user.id,
+                    game = get_val(row, ['Game', 'game', 'TCG'], 'Unknown'),
+                    set_name = get_val(row, ['Set', 'set', 'Expansion'], 'Unknown'),
+                    card_name = get_val(row, ['Name', 'name', 'Card Name'], 'Unknown'),
+                    card_number = str(get_val(row, ['Number', 'number', 'Card Number', 'Collector Number'], '')),
+                    condition = get_val(row, ['Condition', 'cond'], 'NM'),
+                    price = float(get_val(row, ['Price', 'price', 'Market Price'], 0.0)),
+                    quantity = int(get_val(row, ['Quantity', 'qty', 'Count'], 1)),
+                    finish = get_val(row, ['Finish', 'foil', 'Printing'], 'Normal'),
+                    variant = get_val(row, ['Variant', 'features', 'Edition', 'Tag'], ''),
+                    location = get_val(row, ['Location', 'binder', 'Notes'], '')
+                )
+                db.session.add(new_card)
+                count += 1
+            db.session.commit()
+            flash(f'Successfully imported {count} cards!')
+        except Exception as e:
+            flash(f'Error processing CSV: {str(e)}')
+    return redirect(url_for('admin'))
+
+@app.route('/update_card/<int:id>', methods=['POST'])
+@login_required
+def update_card(id):
+    card = Card.query.get_or_404(id)
+    if card.user_id != current_user.id:
+        flash("Unauthorized")
+        return redirect(url_for('admin'))
+
+    action = request.form.get('action')
+    if action == 'sold_one':
+        if card.quantity > 0: card.quantity -= 1
+    elif action == 'delete':
+        db.session.delete(card)
+    elif action == 'update_details':
+        try:
+            card.price = float(request.form.get('price'))
+            card.quantity = int(request.form.get('quantity'))
+            card.condition = request.form.get('condition')
+            card.location = request.form.get('location')
+        except ValueError:
+            flash("Invalid input for price or quantity")
+    db.session.commit()
+    return redirect(url_for('admin'))
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)

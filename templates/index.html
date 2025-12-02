@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory - {{ owner.username }}{% endblock %}
+
+{% block styles %}
+<style>
+    .card-row:hover { background-color: #f1f1f1; cursor: pointer; }
+    .price-tag { font-weight: bold; color: #198754; font-size: 1.1em; }
+    .filter-label { font-size: 0.8rem; font-weight: bold; color: #6c757d; margin-bottom: 2px; }
+    .form-select-sm { font-size: 0.9rem; }
+    @media (max-width: 576px) {
+        .dataTables_filter input { width: 100% !important; margin-left: 0 !important; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    
+    <!-- Advanced Filters Accordion -->
+    <div class="accordion mb-3 shadow-sm" id="filterAccordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOne">
+                <button class="accordion-button collapsed py-2 bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilters" aria-expanded="false" aria-controls="collapseFilters">
+                    <strong>🔍 Filter Options</strong> &nbsp; <span class="text-muted small fw-normal">(Game, Set, Finish...)</span>
+                </button>
+            </h2>
+            <div id="collapseFilters" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#filterAccordion">
+                <div class="accordion-body bg-white">
+                    <div class="row g-2" id="filterContainer">
+                        <!-- Filters will be injected here by JavaScript -->
+                        <div class="col-12 text-center mt-3">
+                            <button id="clearFilters" class="btn btn-sm btn-outline-secondary">Reset All Filters</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Table -->
+    <div class="card shadow-sm">
+        <div class="card-body p-2 p-md-3">
+            <table id="inventoryTable" class="table table-striped table-hover dt-responsive nowrap" style="width:100%">
+                <thead>
+                    <tr>
+                        <th data-priority="1">Name</th>
+                        <th data-priority="4" data-filter-col="true" data-label="Set">Set</th>
+                        <th data-priority="5" data-filter-col="true" data-label="Game">Game</th>
+                        <th data-priority="6">#</th>
+                        <th data-priority="7" data-filter-col="true" data-label="Finish">Finish</th>
+                        <th data-priority="3">Variant</th>
+                        <th data-priority="8" data-filter-col="true" data-label="Condition">Cond</th>
+                        {% if show_prices %}
+                        <th data-priority="2">Price</th>
+                        {% endif %}
+                        <th data-priority="2">Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for card in inventory %}
+                    <tr>
+                        <td style="font-weight: 600;">{{ card.card_name }}</td>
+                        <td>{{ card.set_name }}</td>
+                        <td>{{ card.game }}</td>
+                        <td><small class="text-muted">{{ card.card_number }}</small></td>
+                        <td>{{ card.finish }}</td>
+                        <td>
+                            {% if card.variant %}
+                            <span class="badge bg-info text-dark">{{ card.variant }}</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-secondary">{{ card.condition }}</span></td>
+                        {% if show_prices %}
+                        <td class="price-tag text-end">${{ "%.2f"|format(card.price) }}</td>
+                        {% endif %}
+                        <td class="text-center">{{ card.quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
+
+<script>
+    $(document).ready(function () {
+        var table = $('#inventoryTable').DataTable({
+            responsive: true,
+            pageLength: 25,
+            lengthChange: false,
+            language: {
+                search: "", 
+                searchPlaceholder: "Search by Name..."
+            },
+            columnDefs: [
+                { responsivePriority: 1, targets: 0 },
+                { responsivePriority: 2, targets: -1 },
+                { responsivePriority: 2, targets: -2 }
+            ],
+            initComplete: function () {
+                var api = this.api();
+                var filterContainer = $('#filterContainer');
+                api.columns('[data-filter-col="true"]').every(function () {
+                    var column = this;
+                    var label = $(column.header()).data('label');
+                    var colDiv = $('<div class="col-6 col-md-3"></div>');
+                    var select = $('<select class="form-select form-select-sm"><option value="">All ' + label + 's</option></select>')
+                        .appendTo(colDiv)
+                        .on('change', function () {
+                            var val = $.fn.dataTable.util.escapeRegex($(this).val());
+                            column.search(val ? '^' + val + '$' : '', true, false).draw();
+                        });
+                    colDiv.prepend($('<div class="filter-label">' + label + '</div>'));
+                    filterContainer.prepend(colDiv);
+                    column.data().unique().sort().each(function (d, j) {
+                        var cleanData = $('<div>').html(d).text();
+                        if(cleanData) select.append('<option value="' + cleanData + '">' + cleanData + '</option>');
+                    });
+                });
+                $('#clearFilters').on('click', function() {
+                    $('select.form-select').val('');
+                    api.search('').columns().search('').draw();
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}

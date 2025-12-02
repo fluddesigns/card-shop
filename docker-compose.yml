@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: card_inventory_app
+    restart: unless-stopped
+    volumes:
+      - ./instance:/app/instance
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=0
+      - SECRET_KEY=super_secret_key_for_session_security
+      # Note: ADMIN_PASSWORD is no longer needed as we use database users now
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: card_inventory_tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - web

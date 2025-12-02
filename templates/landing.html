@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Local Card Market{% endblock %}
+
+{% block styles %}
+<style>
+    .hero { background: #343a40; color: white; padding: 3rem 1rem; text-align: center; }
+    .user-card:hover { transform: translateY(-3px); transition: transform 0.2s; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero mb-5">
+    <h1 class="display-4">Local Card Market</h1>
+    <p class="lead">Trade locally, avoid fees.</p>
+    {% if not current_user.is_authenticated %}
+    <div class="mt-4">
+        <a href="{{ url_for('login') }}" class="btn btn-outline-light me-2">Login</a>
+        <a href="{{ url_for('register') }}" class="btn btn-primary">Open Your Shop</a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="container">
+    <h3 class="mb-4 text-muted border-bottom pb-2">Active Traders</h3>
+    <div class="row g-4">
+        {% for user in users %}
+        <div class="col-md-4 col-sm-6">
+            <div class="card h-100 user-card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-primary mb-3">{{ user.username|capitalize }}</h5>
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('user_storefront', username=user.username) }}" class="btn btn-outline-dark btn-sm">Browse Inventory</a>
+                        <a href="{{ url_for('user_binder', username=user.username) }}" class="btn btn-outline-secondary btn-sm">View Binder</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center text-muted py-5">
+            <h4>No traders yet. Be the first!</h4>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="text-center mt-5 mb-5">
+         <a href="{{ url_for('trade_tool') }}" class="btn btn-success btn-lg px-5">⚖️ Open Trade Calculator</a>
+    </div>
+</div>
+{% endblock %}

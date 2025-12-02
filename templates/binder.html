@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}{{ owner.username }}'s Binder{% endblock %}
+
+{% block styles %}
+<style>
+    .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; padding: 15px; }
+    .card-slot { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white; text-align: center; position: relative; aspect-ratio: 2.5/3.5; }
+    .card-info { padding: 5px; font-size: 0.8rem; background: #f8f9fa; position: absolute; bottom: 0; width: 100%; }
+    .price-badge { position: absolute; top: 5px; right: 5px; background: rgba(25, 135, 84, 0.9); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+    .placeholder-art { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #aaa; font-size: 2rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <nav class="navbar navbar-dark bg-dark mb-0">
+        <div class="container-fluid">
+            <span class="navbar-brand h1 mb-0">{{ owner.username }}'s Binder</span>
+            <a href="{{ url_for('user_storefront', username=owner.username) }}" class="btn btn-sm btn-outline-light">List View</a>
+        </div>
+    </nav>
+
+    <div class="binder-grid">
+        {% for card in inventory %}
+        <div class="card-slot shadow-sm">
+            {% if show_prices %}
+            <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
+            {% endif %}
+            
+            <div class="placeholder-art">
+                {% if 'Magic' in card.game %}🔮{% elif 'Pokemon' in card.game %}⚡{% else %}🃏{% endif %}
+            </div>
+            
+            <div class="card-info border-top">
+                <div class="fw-bold text-truncate">{{ card.card_name }}</div>
+                <div class="text-muted small">{{ card.set_name }}</div>
+                <div class="badge bg-secondary text-wrap" style="font-size:0.6rem">{{ card.condition }} {{ card.finish }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
