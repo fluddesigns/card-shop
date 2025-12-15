@@ -1,86 +1,159 @@
 {% extends "base.html" %}
 
-{% block title %}Inventory - {{ owner.username }}{% endblock %}
+{% block title %}My Inventory{% endblock %}
 
 {% block styles %}
 <style>
-    .card-row:hover { background-color: #f1f1f1; cursor: pointer; }
-    .price-tag { font-weight: bold; color: #198754; font-size: 1.1em; }
-    .filter-label { font-size: 0.8rem; font-weight: bold; color: #6c757d; margin-bottom: 2px; }
-    .form-select-sm { font-size: 0.9rem; }
-    @media (max-width: 576px) {
-        .dataTables_filter input { width: 100% !important; margin-left: 0 !important; }
+    /* Hero Banner */
+    .shop-header {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: white;
+        padding: 2rem 1rem;
+        border-radius: 0 0 15px 15px;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
+    .contact-badge {
+        background: rgba(255,255,255,0.2);
+        padding: 8px 16px;
+        border-radius: 20px;
+        display: inline-block;
+        margin-top: 10px;
+        backdrop-filter: blur(5px);
+    }
+
+    /* Toggle Switches */
+    .view-toggle .btn-check:checked + .btn-outline-primary {
+        background-color: #1e3c72;
+        border-color: #1e3c72;
+        color: white;
+    }
+
+    /* Grid/Binder View Styles */
+    .binder-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
+        gap: 20px; 
+    }
+    .card-slot { 
+        border: none;
+        border-radius: 10px; 
+        overflow: hidden; 
+        background: #2c3e50;
+        text-align: center; 
+        position: relative; 
+        aspect-ratio: 2.5/3.5; 
+        transition: transform 0.2s;
+        cursor: pointer;
+    }
+    .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); }
+    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; }
+    .skeleton-loader { width: 100%; height: 100%; background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); background-size: 200% 100%; animation: loading 1.5s infinite; position: absolute; top: 0; left: 0; z-index: 2; }
+    @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .price-badge { position: absolute; top: 8px; right: 8px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; }
+    .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-3">
+<!-- Hero Section -->
+<div class="shop-header text-center">
+    <h1 class="fw-bold">My Card Collection</h1>
+    <p class="mb-0 opacity-75">Browse available singles. Updated daily.</p>
+    <div class="contact-badge">
+        👋 {{ contact_info }}
+    </div>
+</div>
+
+<div class="container-fluid px-3">
     
-    <!-- Advanced Filters Accordion -->
-    <div class="accordion mb-3 shadow-sm" id="filterAccordion">
-        <div class="accordion-item">
-            <h2 class="accordion-header" id="headingOne">
-                <button class="accordion-button collapsed py-2 bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilters" aria-expanded="false" aria-controls="collapseFilters">
-                    <strong>🔍 Filter Options</strong> &nbsp; <span class="text-muted small fw-normal">(Game, Set, Finish...)</span>
-                </button>
-            </h2>
-            <div id="collapseFilters" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#filterAccordion">
-                <div class="accordion-body bg-white">
-                    <div class="row g-2" id="filterContainer">
-                        <!-- Filters will be injected here by JavaScript -->
-                        <div class="col-12 text-center mt-3">
-                            <button id="clearFilters" class="btn btn-sm btn-outline-secondary">Reset All Filters</button>
-                        </div>
-                    </div>
-                </div>
+    <!-- Controls Bar -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <!-- View Toggle -->
+        <div class="btn-group view-toggle" role="group">
+            <input type="radio" class="btn-check" name="viewmode" id="v-grid" autocomplete="off" checked onchange="toggleView('grid')">
+            <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
+
+            <input type="radio" class="btn-check" name="viewmode" id="v-list" autocomplete="off" onchange="toggleView('list')">
+            <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
+        </div>
+
+        <!-- Filter Trigger -->
+        <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
+            🔍 Filter
+        </button>
+    </div>
+
+    <!-- Collapsible Filters -->
+    <div class="collapse mb-3" id="filterPanel">
+        <div class="card card-body bg-light">
+            <div class="row g-2" id="filterContainer">
+                <div class="col-12"><button id="clearFilters" class="btn btn-sm btn-secondary w-100">Clear Filters</button></div>
             </div>
         </div>
     </div>
 
-    <!-- Inventory Table -->
-    <div class="card shadow-sm">
-        <div class="card-body p-2 p-md-3">
-            <table id="inventoryTable" class="table table-striped table-hover dt-responsive nowrap" style="width:100%">
-                <thead>
-                    <tr>
-                        <th data-priority="1">Name</th>
-                        <th data-priority="4" data-filter-col="true" data-label="Set">Set</th>
-                        <th data-priority="5" data-filter-col="true" data-label="Game">Game</th>
-                        <th data-priority="6">#</th>
-                        <th data-priority="7" data-filter-col="true" data-label="Finish">Finish</th>
-                        <th data-priority="3">Variant</th>
-                        <th data-priority="8" data-filter-col="true" data-label="Condition">Cond</th>
-                        {% if show_prices %}
-                        <th data-priority="2">Price</th>
-                        {% endif %}
-                        <th data-priority="2">Qty</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for card in inventory %}
-                    <tr>
-                        <td style="font-weight: 600;">{{ card.card_name }}</td>
-                        <td>{{ card.set_name }}</td>
-                        <td>{{ card.game }}</td>
-                        <td><small class="text-muted">{{ card.card_number }}</small></td>
-                        <td>{{ card.finish }}</td>
-                        <td>
-                            {% if card.variant %}
-                            <span class="badge bg-info text-dark">{{ card.variant }}</span>
-                            {% endif %}
-                        </td>
-                        <td><span class="badge bg-secondary">{{ card.condition }}</span></td>
-                        {% if show_prices %}
-                        <td class="price-tag text-end">${{ "%.2f"|format(card.price) }}</td>
-                        {% endif %}
-                        <td class="text-center">{{ card.quantity }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <!-- VIEW 1: BINDER GRID (Default) -->
+    <div id="view-grid" class="binder-grid">
+        {% for card in inventory %}
+        <div class="card-slot card-item" 
+             data-game="{{ card.game }}" 
+             data-name="{{ card.card_name }}" 
+             data-set="{{ card.set_name }}" 
+             data-price="{{ card.price }}"
+             data-finish="{{ card.finish }}">
+            
+            {% if show_prices %}
+            <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
+            {% endif %}
+
+            <div class="skeleton-loader"></div>
+            <img class="card-image d-none" alt="{{ card.card_name }}" loading="lazy">
+            
+            <div class="info-overlay">
+                <div class="text-truncate fw-bold">{{ card.card_name }}</div>
+                <div class="opacity-75">{{ card.set_name }} • {{ card.condition }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- VIEW 2: DATA TABLE (Hidden) -->
+    <div id="view-list" class="d-none">
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <table id="inventoryTable" class="table table-striped table-hover mb-0 w-100">
+                    <thead>
+                        <tr>
+                            <th data-priority="1">Name</th>
+                            <th data-priority="2" data-filter-col="true" data-label="Set">Set</th>
+                            <th data-priority="4" data-filter-col="true" data-label="Game">Game</th>
+                            <th data-priority="5">#</th>
+                            <th data-priority="3" data-filter-col="true" data-label="Finish">Finish</th>
+                            <th data-priority="6">Cond</th>
+                            {% if show_prices %}<th>Price</th>{% endif %}
+                            <th>Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for card in inventory %}
+                        <tr>
+                            <td class="fw-bold">{{ card.card_name }}</td>
+                            <td>{{ card.set_name }}</td>
+                            <td>{{ card.game }}</td>
+                            <td><small>{{ card.card_number }}</small></td>
+                            <td>{{ card.finish }}</td>
+                            <td><span class="badge bg-secondary">{{ card.condition }}</span></td>
+                            {% if show_prices %}<td class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>{% endif %}
+                            <td>{{ card.quantity }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
+
 </div>
 {% endblock %}
 
@@ -92,34 +165,43 @@
 <script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
 
 <script>
+    // --- VIEW TOGGLE LOGIC ---
+    function toggleView(mode) {
+        if(mode === 'grid') {
+            $('#view-grid').removeClass('d-none');
+            $('#view-list').addClass('d-none');
+        } else {
+            $('#view-grid').addClass('d-none');
+            $('#view-list').removeClass('d-none');
+            // Recalculate table layout since it was hidden
+            $('#inventoryTable').DataTable().columns.adjust().responsive.recalc();
+        }
+    }
+
+    // --- DATATABLES & FILTERS ---
     $(document).ready(function () {
         var table = $('#inventoryTable').DataTable({
             responsive: true,
-            pageLength: 25,
+            pageLength: 50,
             lengthChange: false,
-            language: {
-                search: "", 
-                searchPlaceholder: "Search by Name..."
-            },
-            columnDefs: [
-                { responsivePriority: 1, targets: 0 },
-                { responsivePriority: 2, targets: -1 },
-                { responsivePriority: 2, targets: -2 }
-            ],
+            language: { search: "", searchPlaceholder: "Search list..." },
+            columnDefs: [ { responsivePriority: 1, targets: 0 }, { responsivePriority: 2, targets: -2 } ],
             initComplete: function () {
                 var api = this.api();
                 var filterContainer = $('#filterContainer');
                 api.columns('[data-filter-col="true"]').every(function () {
                     var column = this;
                     var label = $(column.header()).data('label');
-                    var colDiv = $('<div class="col-6 col-md-3"></div>');
-                    var select = $('<select class="form-select form-select-sm"><option value="">All ' + label + 's</option></select>')
+                    var colDiv = $('<div class="col-6 col-md-4"></div>');
+                    var select = $('<select class="form-select form-select-sm"><option value="">All ' + label + '</option></select>')
                         .appendTo(colDiv)
                         .on('change', function () {
                             var val = $.fn.dataTable.util.escapeRegex($(this).val());
                             column.search(val ? '^' + val + '$' : '', true, false).draw();
+                            // Also filter the grid view roughly (Simple implementation)
+                            filterGrid(val);
                         });
-                    colDiv.prepend($('<div class="filter-label">' + label + '</div>'));
+                    colDiv.prepend($('<label class="small fw-bold text-muted mb-0">' + label + '</label>'));
                     filterContainer.prepend(colDiv);
                     column.data().unique().sort().each(function (d, j) {
                         var cleanData = $('<div>').html(d).text();
@@ -129,9 +211,88 @@
                 $('#clearFilters').on('click', function() {
                     $('select.form-select').val('');
                     api.search('').columns().search('').draw();
+                    $('.card-item').show();
                 });
             }
         });
+    });
+
+    function filterGrid(val) {
+        // Basic Grid Filtering hook - hides grid items that don't match
+        if(!val) { $('.card-item').show(); return; }
+        $('.card-item').each(function() {
+            var txt = $(this).text(); 
+            // This is a loose filter for the grid view, List view is exact
+            $(this).toggle(txt.includes(val));
+        });
+    }
+
+    // --- IMAGE LOADER (Smart Queue) ---
+    document.addEventListener("DOMContentLoaded", function() {
+        const queue = Array.from(document.querySelectorAll('.card-slot'));
+        const RATE_LIMIT_DELAY = 150; 
+        processNext();
+
+        function processNext() {
+            if (queue.length === 0) return;
+            const card = queue.shift();
+            fetchCardImage(card).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
+        }
+
+        async function fetchCardImage(card) {
+            const game = (card.dataset.game || "").toLowerCase();
+            const name = card.dataset.name;
+            const set = (card.dataset.set || "").trim(); // Get set info if available
+            const imgEl = card.querySelector('img');
+            const loader = card.querySelector('.skeleton-loader');
+
+            try {
+                if (game.includes('magic') || game.includes('mtg')) {
+                    // Try searching with set code first for accuracy
+                    let query = `https://api.scryfall.com/cards/search?q=name:"${encodeURIComponent(name)}"`;
+                    if (set && set.length < 6) query += `+set:${set}`; // Simple set code check
+                    
+                    let r = await fetch(query);
+                    // Fallback to fuzzy search if specific fails
+                    if (!r.ok) r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+                    
+                    if(!r.ok) throw new Error("404");
+                    const d = await r.json();
+                    
+                    let target = d;
+                    if(d.data && d.data.length > 0) target = d.data[0];
+
+                    if (target.image_uris) loadImage(imgEl, loader, target.image_uris.normal);
+                    else if (target.card_faces) loadImage(imgEl, loader, target.card_faces[0].image_uris.normal);
+                    else throw new Error("No Img");
+                } 
+                else if (game.includes('pokemon') || game.includes('pkmn')) {
+                    const cleanName = name.split('(')[0].trim();
+                    const query = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"&pageSize=1`;
+                    const response = await fetch(query);
+                    if (!response.ok) throw new Error("404");
+                    const data = await response.json();
+                    if (data.data && data.data.length > 0) loadImage(imgEl, loader, data.data[0].images.small);
+                    else throw new Error("No Img");
+                } 
+                else { loadFallback(imgEl, loader, 'default'); }
+            } catch (error) {
+                loadFallback(imgEl, loader, game.includes('pokemon') ? 'pokemon' : 'default');
+            }
+        }
+
+        function loadImage(img, loader, src) {
+            img.src = src;
+            img.onload = () => { loader.classList.add('d-none'); img.classList.remove('d-none'); };
+            img.onerror = () => { loadFallback(img, loader, 'default'); };
+        }
+
+        function loadFallback(img, loader, type) {
+            let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
+            if (type === 'pokemon') backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
+            img.src = backSrc; img.style.opacity = "0.3"; 
+            loader.classList.add('d-none'); img.classList.remove('d-none');
+        }
     });
 </script>
 {% endblock %}
