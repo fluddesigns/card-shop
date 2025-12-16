@@ -2,7 +2,7 @@
 {% block title %}Admin{% endblock %}
 {% block styles %}
 <style>
-    /* Card Styles for Admin Grid (Matches Public View Exactly) */
+    /* Card Styles - Exact Match to Public Inventory */
     .binder-grid { 
         display: grid; 
         grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
@@ -19,6 +19,7 @@
         transition: transform 0.2s; 
         cursor: pointer; 
         border: 2px solid transparent; 
+        /* Removed width: 100% which was causing the vertical stacking */
     }
     .card-slot:hover { 
         transform: translateY(-5px); 
@@ -53,46 +54,9 @@
     
     @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     
-    .price-badge { 
-        position: absolute; 
-        top: 8px; 
-        right: 8px; 
-        background: #27ae60; 
-        color: white; 
-        padding: 2px 6px; 
-        border-radius: 4px; 
-        font-size: 0.8rem; 
-        font-weight: bold; 
-        z-index: 5; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .qty-badge { 
-        position: absolute; 
-        top: 8px; 
-        left: 8px; 
-        background: #dc3545; 
-        color: white; 
-        padding: 2px 6px; 
-        border-radius: 4px; 
-        font-size: 0.8rem; 
-        font-weight: bold; 
-        z-index: 5; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .info-overlay { 
-        position: absolute; 
-        bottom: 0; 
-        left: 0; 
-        width: 100%; 
-        background: rgba(0,0,0,0.85); 
-        color: white; 
-        padding: 5px; 
-        font-size: 0.75rem; 
-        text-align: center; 
-        z-index: 5; 
-    }
+    .price-badge { position: absolute; top: 8px; right: 8px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .qty-badge { position: absolute; top: 8px; left: 8px; background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; }
     
     .view-toggle .btn-check:checked + .btn-outline-primary { background-color: #0d6efd; color: white; }
 </style>
@@ -118,12 +82,12 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="mb-0">Inventory Manager</h4>
         
-        <!-- View Toggle -->
+        <!-- View Toggle (Defaults to Grid now) -->
         <div class="btn-group view-toggle" role="group">
-            <input type="radio" class="btn-check" name="viewmode" id="v-list" checked onchange="toggleView('list')">
-            <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
-            <input type="radio" class="btn-check" name="viewmode" id="v-grid" onchange="toggleView('grid')">
+            <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onchange="toggleView('grid')">
             <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
+            <input type="radio" class="btn-check" name="viewmode" id="v-list" onchange="toggleView('list')">
+            <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
         </div>
     </div>
 
@@ -139,8 +103,39 @@
         </div>
     </div>
 
-    <!-- LIST VIEW -->
-    <div id="view-list">
+    <!-- GRID VIEW (Default) -->
+    <div id="view-grid" class="binder-grid">
+        {% for c in inventory %}
+        <div class="card-slot card-item" 
+             data-game="{{ c.game }}" 
+             data-name="{{ c.card_name }}" 
+             data-set="{{ c.set_name }}"
+             data-image="{{ c.image_url }}"
+             onclick="openSaleModal('{{ c.id }}', '{{ c.card_name|replace("'", "") }}', '{{ c.quantity }}')">
+            
+            <div class="price-badge">${{ "%.2f"|format(c.price) }}</div>
+            <div class="qty-badge">x{{ c.quantity }}</div>
+
+            <div class="skeleton-loader" id="loader-{{ c.id }}"></div>
+            
+            <img class="card-image {% if not c.image_url %}needs-fetch{% endif %}" 
+                 id="img-{{ c.id }}"
+                 src="{{ c.image_url if c.image_url else 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }}" 
+                 alt="{{ c.card_name }}" 
+                 loading="lazy"
+                 onload="imageLoaded('{{ c.id }}')"
+                 onerror="imageFailed(this, '{{ c.id }}')">
+            
+            <div class="info-overlay">
+                <div class="text-truncate fw-bold">{{ c.card_name }}</div>
+                <div class="opacity-75">{{ c.set_name }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- LIST VIEW (Hidden) -->
+    <div id="view-list" class="d-none">
         <div class="card shadow-sm">
             <div class="card-body p-0">
                 <table id="admTable" class="table table-striped table-bordered dt-responsive nowrap w-100">
@@ -165,37 +160,6 @@
                 </table>
             </div>
         </div>
-    </div>
-
-    <!-- GRID VIEW -->
-    <div id="view-grid" class="binder-grid d-none">
-        {% for c in inventory %}
-        <div class="card-slot card-item" 
-             data-game="{{ c.game }}" 
-             data-name="{{ c.card_name }}" 
-             data-set="{{ c.set_name }}"
-             onclick="openSaleModal('{{ c.id }}', '{{ c.card_name|replace("'", "") }}', '{{ c.quantity }}')">
-            
-            <div class="price-badge">${{ "%.2f"|format(c.price) }}</div>
-            <div class="qty-badge">x{{ c.quantity }}</div>
-
-            <div class="skeleton-loader" id="loader-{{ c.id }}"></div>
-            
-            <!-- Smart Image Loading: Use DB URL if available, else mark for fetch -->
-            <img class="card-image {% if not c.image_url %}needs-fetch{% endif %}" 
-                 id="img-{{ c.id }}"
-                 src="{{ c.image_url if c.image_url else '' }}" 
-                 alt="{{ c.card_name }}" 
-                 loading="lazy"
-                 onload="imageLoaded('{{ c.id }}')"
-                 onerror="imageFailed(this, '{{ c.id }}')">
-            
-            <div class="info-overlay">
-                <div class="text-truncate fw-bold">{{ c.card_name }}</div>
-                <div class="opacity-75">{{ c.set_name }}</div>
-            </div>
-        </div>
-        {% endfor %}
     </div>
 
     <!-- MODALS -->
@@ -320,25 +284,21 @@
     let table;
     
     $(document).ready(function(){ 
+        // Force the layout to put length selector at bottom using DOM option
         table = $('#admTable').DataTable({
             responsive: true, 
             order: [[0,'desc']],
             lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
             pageLength: 20,
-            // DOM LAYOUT: 
-            // t = table
-            // <...> wrapper for footer
-            // l = length, i = info, p = pagination
-            // This puts everything at the bottom
+            // 'r' = processing, 't' = table, 'l' = length, 'i' = info, 'p' = pagination
+            // This DOM string renders Table, then a div containing Length, Info, and Pagination at the bottom
             dom: 'rt<"d-flex justify-content-between align-items-center p-2 mt-2 border-top"lip>' 
         }); 
 
         // Bind Custom Search Input
         $('#searchInput').on('keyup', function() {
             const val = $(this).val();
-            // Filter List View
             table.search(val).draw();
-            // Filter Grid View
             filterGrid(val);
         });
     });
@@ -374,7 +334,6 @@
         const select = $('#saleQtySelect');
         select.empty();
         
-        // Populate dropdown with 1 to Max
         for (let i = 1; i <= maxQty; i++) {
             select.append(new Option(i, i));
         }
