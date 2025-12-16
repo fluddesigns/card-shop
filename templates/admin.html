@@ -2,13 +2,18 @@
 {% block title %}Admin{% endblock %}
 {% block styles %}
 <style>
-    /* Card Styles for Admin Grid */
+    /* Card Styles for Admin Grid (Matches Public View) */
     .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; margin-top: 15px; }
     .card-slot { border-radius: 10px; overflow: hidden; background: #2c3e50; position: relative; aspect-ratio: 2.5/3.5; transition: transform 0.2s; cursor: pointer; border: 2px solid transparent; }
     .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); border-color: #0d6efd; }
-    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; }
+    
+    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; opacity: 0; }
+    .card-image.loaded { opacity: 1; }
+    
     .skeleton-loader { width: 100%; height: 100%; background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); background-size: 200% 100%; animation: loading 1.5s infinite; position: absolute; top: 0; left: 0; z-index: 2; }
+    .skeleton-loader.hidden { display: none; }
     @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    
     .price-badge { position: absolute; top: 5px; right: 5px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; }
     .qty-badge { position: absolute; top: 5px; left: 5px; background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; }
     .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; }
@@ -18,6 +23,17 @@
 {% endblock %}
 
 {% block content %}
+<!-- Define Handlers Early -->
+<script>
+    function imageLoaded(id) {
+        const loader = document.getElementById('loader-' + id);
+        const img = document.getElementById('img-' + id);
+        if (loader) loader.classList.add('hidden');
+        if (img) img.classList.add('loaded');
+    }
+    function imageFailed(img, id) { img.classList.add('needs-fetch'); }
+</script>
+
 <div class="container-fluid mt-3">
     {% with messages = get_flashed_messages() %}
     {% if messages %}<div class="alert alert-warning p-2">{{ messages[0] }}</div>{% endif %}
@@ -63,8 +79,8 @@
                             <td><input type="number" name="quantity" value="{{ c.quantity }}" class="form-control form-control-sm" style="width:50px"></td>
                             <td>
                                 <button type="button" class="btn btn-warning btn-sm p-0 px-1" onclick="openSaleModal('{{ c.id }}', '{{ c.card_name|replace("'", "") }}', '{{ c.quantity }}')">Sold</button>
-                                <button type="submit" name="action" value="update_details" class="btn btn-success btn-sm p-0 px-1">💾</button>
-                                <button type="submit" name="action" value="delete" class="btn btn-danger btn-sm p-0 px-1" onclick="return confirm('Delete?')">✕</button>
+                                <button type="submit" name="action" value="update_details" class="btn btn-success btn-sm p-0 px-1" title="Save">Save</button>
+                                <button type="submit" name="action" value="delete" class="btn btn-danger btn-sm p-0 px-1" onclick="return confirm('Delete?')" title="Delete">Del</button>
                             </td>
                             </form>
                         </tr>
@@ -82,14 +98,21 @@
              data-game="{{ c.game }}" 
              data-name="{{ c.card_name }}" 
              data-set="{{ c.set_name }}"
-             data-image="{{ c.image_url }}"
              onclick="openSaleModal('{{ c.id }}', '{{ c.card_name|replace("'", "") }}', '{{ c.quantity }}')">
             
             <div class="price-badge">${{ "%.2f"|format(c.price) }}</div>
             <div class="qty-badge">x{{ c.quantity }}</div>
 
-            <div class="skeleton-loader"></div>
-            <img class="card-image d-none" alt="{{ c.card_name }}" loading="lazy">
+            <div class="skeleton-loader" id="loader-{{ c.id }}"></div>
+            
+            <!-- Smart Image Loading: Use DB URL if available, else mark for fetch -->
+            <img class="card-image {% if not c.image_url %}needs-fetch{% endif %}" 
+                 id="img-{{ c.id }}"
+                 src="{{ c.image_url if c.image_url else '' }}" 
+                 alt="{{ c.card_name }}" 
+                 loading="lazy"
+                 onload="imageLoaded('{{ c.id }}')"
+                 onerror="imageFailed(this, '{{ c.id }}')">
             
             <div class="info-overlay">
                 <div class="text-truncate fw-bold">{{ c.card_name }}</div>
@@ -226,7 +249,12 @@
             order: [[0,'desc']],
             lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
             pageLength: 20,
-            dom: '<"d-flex justify-content-end p-2"l>rt<"d-flex justify-content-between align-items-center p-2"ip>' // Custom layout, removed default search
+            // DOM LAYOUT: 
+            // t = table
+            // <...> wrapper for footer
+            // l = length, i = info, p = pagination
+            // This puts everything at the bottom
+            dom: 'rt<"d-flex justify-content-between align-items-center p-2 mt-2 border-top"lip>' 
         }); 
 
         // Bind Custom Search Input
@@ -278,33 +306,60 @@
         new bootstrap.Modal(document.getElementById('saleModal')).show();
     }
 
-    // --- Image Loader Logic (Same as Storefront) ---
+    // --- API FALLBACK QUEUE (For Admin Grid) ---
     document.addEventListener("DOMContentLoaded", function() {
-        const queue = Array.from(document.querySelectorAll('img:not([src])')); // Only load images that need it
-        // Note: In admin view, we rely on Native CSV URLs first if available
-        // Similar logic to index.html can be pasted here if needed for API fetching
-        // For brevity, skipping the full API fetcher block here since admin usually checks text data
-        // But if you want visuals, copy the `fetchCardImage` block from index.html here.
-    });
-    
-    // Minimal Image Loader for Admin (Uses CSV URL only for speed/simplicity, expands if requested)
-    document.addEventListener("DOMContentLoaded", function() {
-        const cards = document.querySelectorAll('.card-slot');
-        cards.forEach(card => {
-            const img = card.querySelector('img');
-            const url = card.dataset.image;
+        const queue = Array.from(document.querySelectorAll('img.needs-fetch'));
+        const RATE_LIMIT_DELAY = 150; 
+        processNext();
+
+        function processNext() {
+            if (queue.length === 0) return;
+            const img = queue.shift();
+            const cardSlot = img.closest('.card-slot');
+            if (cardSlot) {
+                fetchCardImage(cardSlot, img).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
+            } else { processNext(); }
+        }
+
+        async function fetchCardImage(card, imgEl) {
+            const game = (card.dataset.game || "").toLowerCase();
+            const name = card.dataset.name;
+            const set = (card.dataset.set || "").trim();
             const loader = card.querySelector('.skeleton-loader');
-            if(url && url.length > 5) {
-                 img.src = url;
-                 img.onload = () => { loader.style.display='none'; img.classList.remove('d-none'); };
-            } else {
-                 // Fallback static
-                 loader.style.display='none'; 
-                 img.src = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
-                 img.style.opacity = "0.2";
-                 img.classList.remove('d-none');
-            }
-        });
+
+            try {
+                if (game.includes('magic') || game.includes('mtg')) {
+                    let query = `https://api.scryfall.com/cards/search?q=name:"${encodeURIComponent(name)}"`;
+                    if (set) query += `+set:"${encodeURIComponent(set)}"`;
+                    let r = await fetch(query);
+                    if (!r.ok) r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+                    if(!r.ok) throw new Error("404");
+                    const d = await r.json();
+                    let target = d.data && d.data.length > 0 ? d.data[0] : d;
+                    if (target.image_uris) applySrc(imgEl, loader, target.image_uris.normal);
+                    else if (target.card_faces) applySrc(imgEl, loader, target.card_faces[0].image_uris.normal);
+                    else throw new Error("No Img");
+                } 
+                else if (game.includes('pokemon') || game.includes('pkmn')) {
+                    const cleanName = name.split('(')[0].trim();
+                    let query = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`;
+                    if (set) query += ` set.name:"${encodeURIComponent(set)}"`;
+                    let r = await fetch(query);
+                    let d = await r.json();
+                    if (!d.data || d.data.length === 0) { r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`); d = await r.json(); }
+                    if (d.data && d.data.length > 0) applySrc(imgEl, loader, d.data[0].images.small);
+                    else throw new Error("No Img");
+                } 
+                else { loadFallback(imgEl, loader, 'default'); }
+            } catch (error) { loadFallback(imgEl, loader, game.includes('pokemon') ? 'pokemon' : 'default'); }
+        }
+        function applySrc(img, loader, src) { img.src = src; }
+        function loadFallback(img, loader, type) {
+            let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
+            if (type === 'pokemon') backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
+            img.src = backSrc; img.style.opacity = "0.3"; 
+            if(loader) loader.classList.add('hidden'); img.classList.add('loaded');
+        }
     });
 </script>
 {% endblock %}
