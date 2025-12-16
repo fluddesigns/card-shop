@@ -1,1 +1,41 @@
-﻿{% extends "base.html" %}{% block title %}Register{% endblock %}{% block content %}<div class="container mt-5" style="max-width:400px"><div class="card shadow"><div class="card-body p-4"><h4 class="text-center mb-3">Create Account</h4>{% with m=get_flashed_messages() %}{% if m %}<div class="alert alert-warning">{{ m[0] }}</div>{% endif %}{% endwith %}<form method="POST"><div class="mb-3"><label class="form-label">Username</label><input type="text" name="username" class="form-control" required autofocus></div><div class="mb-3"><label class="form-label">Password</label><input type="password" name="password" class="form-control" required></div><div class="d-grid"><button type="submit" class="btn btn-success">Register</button></div><div class="text-center mt-3"><a href="{{ url_for('login') }}" class="small">Already have an account?</a></div></form></div></div></div>{% endblock %}
+﻿{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<div class="container mt-5" style="max-width:400px">
+    <div class="card shadow">
+        <div class="card-body p-4">
+            <h4 class="text-center mb-3">Create Account</h4>
+            {% with m=get_flashed_messages() %}
+            {% if m %}<div class="alert alert-warning">{{ m[0] }}</div>{% endif %}
+            {% endwith %}
+            <form method="POST">
+                <!-- Honeypot for bots (Hidden) -->
+                <div style="display:none!important;">
+                    <label>Keep this field blank</label>
+                    <input type="text" name="hp_check" tabindex="-1" autocomplete="off">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Username (Store Name)</label>
+                    <input type="text" name="username" class="form-control" placeholder="e.g. PokeMaster99" required autofocus>
+                    <div class="form-text small">This will be your public shop URL.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Confirm Password</label>
+                    <input type="password" name="confirm_password" class="form-control" required>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-success">Register</button>
+                </div>
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('login') }}" class="small">Already have an account?</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

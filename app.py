@@ -86,9 +86,20 @@ def register():
         return redirect(url_for('admin'))
     
     if request.method == 'POST':
+        # 1. Anti-Spam Honeypot Check
+        if request.form.get('hp_check'):
+            # If this hidden field is filled, it's a bot. Fail silently or redirect.
+            return redirect(url_for('index'))
+
         username = request.form.get('username').lower()
         password = request.form.get('password')
+        confirm = request.form.get('confirm_password')
         
+        # 2. Validation
+        if password != confirm:
+            flash('Passwords do not match.')
+            return redirect(url_for('register'))
+
         if User.query.filter_by(username=username).first():
             flash('Username already exists.')
             return redirect(url_for('register'))
