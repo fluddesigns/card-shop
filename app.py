@@ -75,6 +75,7 @@ def get_user_settings(user_id):
 
 @app.route('/')
 def index():
+    # Landing page listing all active traders
     users = User.query.all()
     return render_template('landing.html', users=users)
 
@@ -129,10 +130,13 @@ def logout():
 def profile():
     return render_template('profile.html', user=current_user)
 
+# --- PUBLIC STOREFRONTS ---
+
 @app.route('/u/<username>')
 def user_storefront(username):
     user = User.query.filter_by(username=username.lower()).first_or_404()
     settings = get_user_settings(user.id)
+    # Only show in-stock items
     inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).all()
     return render_template('index.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
 
@@ -153,6 +157,8 @@ def trade_tool():
     users = User.query.all()
     return render_template('trade.html', users=users)
 
+# --- API ENDPOINTS ---
+
 @app.route('/api/inventory/<username>')
 def api_inventory(username):
     user = User.query.filter_by(username=username.lower()).first_or_404()
@@ -171,6 +177,8 @@ def api_inventory(username):
             'variant': card.variant
         })
     return jsonify(data)
+
+# --- ADMIN PANEL ---
 
 @app.route('/admin')
 @login_required
@@ -208,7 +216,7 @@ def add_card():
         )
         db.session.add(new_card)
         db.session.commit()
-        flash(f'Added {new_card.card_name}')
+        flash(f'Added {new_card.card_name} to inventory.')
     except Exception as e:
         flash(f'Error adding card: {str(e)}')
     return redirect(url_for('admin'))
@@ -258,34 +266,23 @@ def upload_csv():
     if file:
         try:
             df = pd.read_csv(file)
-            
-            # --- IMPROVED HEADER MAPPING ---
             def get_val(row, keys, default=None):
                 for k in keys:
                     if k in row: return row[k] if pd.notna(row[k]) else default
                 return default
-            
             count = 0
             for _, row in df.iterrows():
-                # TCGPlayer Headers
-                game_val = get_val(row, ['Product Line', 'Game', 'game', 'Category'], 'TCGPlayer Import')
-                card_name_val = get_val(row, ['Product Name', 'Name', 'name', 'Card Name', 'Title'], 'Unknown')
-                set_name_val = get_val(row, ['Set Name', 'Set', 'set', 'Expansion'], 'Unknown')
-                
-                # Condition Mapping (Optional but helpful)
-                raw_cond = get_val(row, ['Condition', 'cond'], 'NM')
-                
-                # Add to DB
+                game_val = get_val(row, ['Game', 'game', 'Category'], 'TCGPlayer Import')
                 db.session.add(Card(
                     user_id=current_user.id,
                     game=game_val,
-                    set_name=set_name_val,
-                    card_name=card_name_val,
+                    set_name=get_val(row, ['Set', 'set', 'Set Name', 'Expansion'], 'Unknown'),
+                    card_name=get_val(row, ['Name', 'name', 'Product Name', 'Card Name'], 'Unknown'),
                     card_number=str(get_val(row, ['Number', 'number', 'Card Number'], '')),
-                    condition=raw_cond,
-                    price=float(get_val(row, ['TCG Market Price', 'Price', 'price', 'Market Price'], 0.0)),
-                    quantity=int(get_val(row, ['Total Quantity', 'Quantity', 'qty', 'Add to Quantity'], 1)),
-                    finish=get_val(row, ['Rarity', 'Finish', 'foil', 'Printing'], 'Normal'), # Rarity is often mapped to finish in some CSVs or ignored
+                    condition=get_val(row, ['Condition', 'cond'], 'NM'),
+                    price=float(get_val(row, ['Price', 'price', 'TCG Market Price', 'Market Price'], 0.0)),
+                    quantity=int(get_val(row, ['Quantity', 'qty', 'Total Quantity', 'Add to Quantity'], 1)),
+                    finish=get_val(row, ['Finish', 'foil', 'Printing'], 'Normal'),
                     location=get_val(row, ['Location', 'binder'], '')
                 ))
                 count += 1
