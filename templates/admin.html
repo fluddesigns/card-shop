@@ -2,21 +2,97 @@
 {% block title %}Admin{% endblock %}
 {% block styles %}
 <style>
-    /* Card Styles for Admin Grid (Matches Public View) */
-    .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-top: 15px; }
-    .card-slot { border-radius: 10px; overflow: hidden; background: #2c3e50; position: relative; aspect-ratio: 2.5/3.5; transition: transform 0.2s; cursor: pointer; border: 2px solid transparent; }
-    .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); border-color: #0d6efd; }
+    /* Card Styles for Admin Grid (Matches Public View Exactly) */
+    .binder-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
+        gap: 15px; 
+        margin-top: 15px; 
+    }
+    .card-slot { 
+        border: none; 
+        border-radius: 10px; 
+        overflow: hidden; 
+        background: #2c3e50; 
+        position: relative; 
+        aspect-ratio: 2.5/3.5; 
+        transition: transform 0.2s; 
+        cursor: pointer; 
+        border: 2px solid transparent; 
+    }
+    .card-slot:hover { 
+        transform: translateY(-5px); 
+        z-index: 10; 
+        box-shadow: 0 8px 15px rgba(0,0,0,0.3); 
+        border-color: #0d6efd; 
+    }
     
-    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; opacity: 0; }
+    .card-image { 
+        width: 100%; 
+        height: 100%; 
+        object-fit: contain; 
+        position: relative; 
+        z-index: 1; 
+        transition: opacity 0.3s; 
+        opacity: 0; 
+    }
     .card-image.loaded { opacity: 1; }
     
-    .skeleton-loader { width: 100%; height: 100%; background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); background-size: 200% 100%; animation: loading 1.5s infinite; position: absolute; top: 0; left: 0; z-index: 2; }
+    .skeleton-loader { 
+        width: 100%; 
+        height: 100%; 
+        background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); 
+        background-size: 200% 100%; 
+        animation: loading 1.5s infinite; 
+        position: absolute; 
+        top: 0; 
+        left: 0; 
+        z-index: 2; 
+    }
     .skeleton-loader.hidden { display: none; }
+    
     @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     
-    .price-badge { position: absolute; top: 5px; right: 5px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; }
-    .qty-badge { position: absolute; top: 5px; left: 5px; background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; }
-    .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; }
+    .price-badge { 
+        position: absolute; 
+        top: 8px; 
+        right: 8px; 
+        background: #27ae60; 
+        color: white; 
+        padding: 2px 6px; 
+        border-radius: 4px; 
+        font-size: 0.8rem; 
+        font-weight: bold; 
+        z-index: 5; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .qty-badge { 
+        position: absolute; 
+        top: 8px; 
+        left: 8px; 
+        background: #dc3545; 
+        color: white; 
+        padding: 2px 6px; 
+        border-radius: 4px; 
+        font-size: 0.8rem; 
+        font-weight: bold; 
+        z-index: 5; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .info-overlay { 
+        position: absolute; 
+        bottom: 0; 
+        left: 0; 
+        width: 100%; 
+        background: rgba(0,0,0,0.85); 
+        color: white; 
+        padding: 5px; 
+        font-size: 0.75rem; 
+        text-align: center; 
+        z-index: 5; 
+    }
     
     .view-toggle .btn-check:checked + .btn-outline-primary { background-color: #0d6efd; color: white; }
 </style>
@@ -105,11 +181,10 @@
 
             <div class="skeleton-loader" id="loader-{{ c.id }}"></div>
             
-            <!-- Smart Image Loading -->
-            <!-- Uses 1px transparent gif as placeholder so onload can fire when real src is swapped in -->
+            <!-- Smart Image Loading: Use DB URL if available, else mark for fetch -->
             <img class="card-image {% if not c.image_url %}needs-fetch{% endif %}" 
                  id="img-{{ c.id }}"
-                 src="{{ c.image_url if c.image_url else 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }}" 
+                 src="{{ c.image_url if c.image_url else '' }}" 
                  alt="{{ c.card_name }}" 
                  loading="lazy"
                  onload="imageLoaded('{{ c.id }}')"
@@ -250,12 +325,7 @@
             order: [[0,'desc']],
             lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
             pageLength: 20,
-            // DOM LAYOUT: 
-            // t = table
-            // <...> wrapper for footer
-            // l = length, i = info, p = pagination
-            // This puts everything at the bottom
-            dom: 'rt<"d-flex justify-content-between align-items-center p-2 mt-2 border-top"lip>' 
+            dom: '<"d-flex justify-content-end p-2"l>rt<"d-flex justify-content-between align-items-center p-2"ip>' 
         }); 
 
         // Bind Custom Search Input
