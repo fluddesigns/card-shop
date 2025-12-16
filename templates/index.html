@@ -1,1 +1,190 @@
-﻿
+﻿{% extends "base.html" %}
+
+{% block title %}Inventory - {{ owner.username }}{% endblock %}
+
+{% block styles %}
+<style>
+    .shop-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2rem 1rem; text-align: center; border-radius: 0 0 15px 15px; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+    .contact-badge { background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; display: inline-block; margin-top: 10px; backdrop-filter: blur(5px); }
+    
+    /* Toggle Switches */
+    .view-toggle .btn-check:checked + .btn-outline-primary {
+        background-color: #1e3c72; border-color: #1e3c72; color: white;
+    }
+
+    /* Grid/Binder View Styles */
+    .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+    .card-slot { border: none; border-radius: 10px; overflow: hidden; background: #2c3e50; position: relative; aspect-ratio: 2.5/3.5; transition: transform 0.2s; cursor: pointer; }
+    .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); }
+    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; }
+    .skeleton-loader { width: 100%; height: 100%; background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); background-size: 200% 100%; animation: loading 1.5s infinite; position: absolute; top: 0; left: 0; z-index: 2; }
+    @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .price-badge { position: absolute; top: 8px; right: 8px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; }
+    .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="shop-header text-center">
+    <h1 class="fw-bold">{{ owner.username|capitalize }}'s Collection</h1>
+    <p class="mb-0 opacity-75">Browse available singles.</p>
+</div>
+
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="btn-group view-toggle" role="group">
+            <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onchange="toggleView('grid')">
+            <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
+            <input type="radio" class="btn-check" name="viewmode" id="v-list" onchange="toggleView('list')">
+            <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
+        </div>
+    </div>
+
+    <!-- GRID -->
+    <div id="view-grid" class="binder-grid">
+        {% for card in inventory %}
+        <div class="card-slot card-item" 
+             data-game="{{ card.game }}" 
+             data-name="{{ card.card_name }}" 
+             data-set="{{ card.set_name }}">
+            
+            {% if show_prices %}
+            <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
+            {% endif %}
+
+            <div class="skeleton-loader"></div>
+            <img class="card-image d-none" alt="{{ card.card_name }}" loading="lazy">
+            
+            <div class="info-overlay">
+                <div class="text-truncate fw-bold">{{ card.card_name }}</div>
+                <div class="opacity-75">{{ card.set_name }} • {{ card.condition }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- LIST -->
+    <div id="view-list" class="d-none">
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <table id="inventoryTable" class="table table-striped table-hover mb-0 w-100">
+                    <thead><tr><th>Name</th><th>Set</th><th>Game</th><th>Finish</th><th>Cond</th>{% if show_prices %}<th>Price</th>{% endif %}<th>Qty</th></tr></thead>
+                    <tbody>
+                        {% for card in inventory %}
+                        <tr>
+                            <td class="fw-bold">{{ card.card_name }}</td>
+                            <td>{{ card.set_name }}</td>
+                            <td>{{ card.game }}</td>
+                            <td>{{ card.finish }}</td>
+                            <td><span class="badge bg-secondary">{{ card.condition }}</span></td>
+                            {% if show_prices %}<td class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>{% endif %}
+                            <td>{{ card.quantity }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
+<script>
+    function toggleView(mode) {
+        if(mode === 'grid') {
+            $('#view-grid').removeClass('d-none');
+            $('#view-list').addClass('d-none');
+        } else {
+            $('#view-grid').addClass('d-none');
+            $('#view-list').removeClass('d-none');
+            $('#inventoryTable').DataTable().columns.adjust().responsive.recalc();
+        }
+    }
+
+    $(document).ready(function () {
+        $('#inventoryTable').DataTable({
+            responsive: true,
+            pageLength: 50,
+            language: { search: "", searchPlaceholder: "Search list..." }
+        });
+    });
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const queue = Array.from(document.querySelectorAll('.card-slot'));
+        const RATE_LIMIT_DELAY = 150; 
+        processNext();
+
+        function processNext() {
+            if (queue.length === 0) return;
+            const card = queue.shift();
+            fetchCardImage(card).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
+        }
+
+        async function fetchCardImage(card) {
+            const game = (card.dataset.game || "").toLowerCase();
+            const name = card.dataset.name;
+            const set = (card.dataset.set || "").trim();
+            const imgEl = card.querySelector('img');
+            const loader = card.querySelector('.skeleton-loader');
+
+            try {
+                if (game.includes('magic') || game.includes('mtg')) {
+                    let query = `https://api.scryfall.com/cards/search?q=name:"${encodeURIComponent(name)}"`;
+                    if (set) query += `+set:"${encodeURIComponent(set)}"`;
+                    
+                    let r = await fetch(query);
+                    if (!r.ok) r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+                    
+                    if(!r.ok) throw new Error("404");
+                    const d = await r.json();
+                    
+                    let target = d;
+                    if(d.data && d.data.length > 0) target = d.data[0];
+
+                    if (target.image_uris) loadImage(imgEl, loader, target.image_uris.normal);
+                    else if (target.card_faces) loadImage(imgEl, loader, target.card_faces[0].image_uris.normal);
+                    else throw new Error("No Img");
+                } 
+                else if (game.includes('pokemon') || game.includes('pkmn')) {
+                    const cleanName = name.split('(')[0].trim();
+                    let query = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`;
+                    if (set) query += ` set.name:"${encodeURIComponent(set)}"`;
+                    
+                    let r = await fetch(query);
+                    let d = await r.json();
+                    
+                    if (!d.data || d.data.length === 0) {
+                         r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`);
+                         d = await r.json();
+                    }
+
+                    if (d.data && d.data.length > 0) loadImage(imgEl, loader, d.data[0].images.small);
+                    else throw new Error("No Img");
+                } 
+                else { loadFallback(imgEl, loader, 'default'); }
+            } catch (error) {
+                loadFallback(imgEl, loader, game.includes('pokemon') ? 'pokemon' : 'default');
+            }
+        }
+
+        function loadImage(img, loader, src) {
+            img.src = src;
+            img.onload = () => { loader.classList.add('d-none'); img.classList.remove('d-none'); };
+            img.onerror = () => { loadFallback(img, loader, 'default'); };
+        }
+
+        function loadFallback(img, loader, type) {
+            let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
+            if (type === 'pokemon') backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
+            img.src = backSrc; img.style.opacity = "0.3"; 
+            loader.classList.add('d-none'); img.classList.remove('d-none');
+        }
+    });
+</script>
+{% endblock %}
