@@ -325,7 +325,12 @@
             order: [[0,'desc']],
             lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
             pageLength: 20,
-            dom: '<"d-flex justify-content-end p-2"l>rt<"d-flex justify-content-between align-items-center p-2"ip>' 
+            // DOM LAYOUT: 
+            // t = table
+            // <...> wrapper for footer
+            // l = length, i = info, p = pagination
+            // This puts everything at the bottom
+            dom: 'rt<"d-flex justify-content-between align-items-center p-2 mt-2 border-top"lip>' 
         }); 
 
         // Bind Custom Search Input
