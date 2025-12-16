@@ -2,7 +2,7 @@
 import pandas as pd
 import re
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -25,7 +25,6 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
-    # Admin Flag
     is_admin = db.Column(db.Boolean, default=False)
     cards = db.relationship('Card', backref='owner', lazy=True, cascade="all, delete-orphan")
     sales = db.relationship('Sale', backref='seller', lazy=True, cascade="all, delete-orphan")
@@ -73,7 +72,7 @@ class Sale(db.Model):
 
 with app.app_context():
     db.create_all()
-    # Auto-promote 'flud' logic on startup
+    # Auto-promote 'flud'
     admin_user = User.query.filter_by(username='flud').first()
     if admin_user and not admin_user.is_admin:
         admin_user.is_admin = True
@@ -93,7 +92,6 @@ def get_user_settings(user_id):
 
 @app.route('/')
 def index():
-    # Landing page listing all active traders
     users = User.query.all()
     return render_template('landing.html', users=users)
 
@@ -103,16 +101,12 @@ def register():
         return redirect(url_for('admin'))
     
     if request.method == 'POST':
-        # 1. Anti-Spam Honeypot Check
-        if request.form.get('hp_check'):
-            # If this hidden field is filled, it's a bot. Fail silently or redirect.
-            return redirect(url_for('index'))
+        if request.form.get('hp_check'): return redirect(url_for('index'))
 
         username = request.form.get('username').lower()
         password = request.form.get('password')
         confirm = request.form.get('confirm_password')
         
-        # 2. Validation
         if password != confirm:
             flash('Passwords do not match.')
             return redirect(url_for('register'))
@@ -123,10 +117,7 @@ def register():
             
         new_user = User(username=username)
         new_user.set_password(password)
-        
-        # Immediate Promotion for Flud
-        if username == 'flud': 
-            new_user.is_admin = True
+        if username == 'flud': new_user.is_admin = True
         
         db.session.add(new_user)
         db.session.commit()
@@ -147,11 +138,6 @@ def login():
         
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
-            # Self-healing: Ensure Flud is always admin upon login
-            if user.username == 'flud' and not user.is_admin:
-                user.is_admin = True
-                db.session.commit()
-                
             login_user(user)
             return redirect(url_for('admin'))
             
@@ -175,16 +161,8 @@ def profile():
 def user_storefront(username):
     user = User.query.filter_by(username=username.lower()).first_or_404()
     settings = get_user_settings(user.id)
-    # Only show in-stock items
-    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).all()
+    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).order_by(Card.price.desc()).all()
     return render_template('index.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
-
-@app.route('/u/<username>/binder')
-def user_binder(username):
-    user = User.query.filter_by(username=username.lower()).first_or_404()
-    settings = get_user_settings(user.id)
-    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).all()
-    return render_template('binder.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
 
 @app.route('/u/<username>/qr')
 def user_qr(username):
@@ -231,8 +209,6 @@ def sales():
     sales_history = Sale.query.filter_by(user_id=current_user.id).order_by(Sale.sale_date.desc()).all()
     total_revenue = sum(s.sale_price for s in sales_history)
     return render_template('sales.html', sales=sales_history, total=total_revenue)
-
-# --- SUPER ADMIN ROUTES ---
 
 @app.route('/super_admin')
 @login_required
@@ -296,7 +272,7 @@ def add_card():
         )
         db.session.add(new_card)
         db.session.commit()
-        flash(f'Added {new_card.card_name} to inventory.')
+        flash(f'Added {new_card.card_name}')
     except Exception as e:
         flash(f'Error adding card: {str(e)}')
     return redirect(url_for('admin'))
@@ -382,19 +358,41 @@ def update_card(id):
         return redirect(url_for('admin'))
 
     action = request.form.get('action')
-    if action == 'sold_one':
+    
+    # NEW: Logic for Custom Quantity Sales
+    if action == 'sold_custom':
+        try:
+            qty_sold = int(request.form.get('sold_quantity', 1))
+            if card.quantity >= qty_sold:
+                card.quantity -= qty_sold
+                # Create Sale Record
+                sale = Sale(
+                    user_id=current_user.id,
+                    card_name=card.card_name,
+                    set_name=card.set_name,
+                    # Calculate total transaction value
+                    sale_price=card.price * qty_sold, 
+                    quantity=qty_sold
+                )
+                db.session.add(sale)
+                flash(f"Sold {qty_sold}x {card.card_name}")
+            else:
+                flash("Not enough quantity.")
+        except ValueError:
+            flash("Invalid quantity.")
+
+    elif action == 'sold_one':
         if card.quantity > 0: 
             card.quantity -= 1
-            # CREATE SALE RECORD
             sale = Sale(
-                user_id=current_user.id,
-                card_name=card.card_name,
-                set_name=card.set_name,
-                sale_price=card.price,
+                user_id=current_user.id, 
+                card_name=card.card_name, 
+                set_name=card.set_name, 
+                sale_price=card.price, 
                 quantity=1
             )
             db.session.add(sale)
-            flash(f"Sold 1x {card.card_name} for ${card.price:.2f}")
+            flash(f"Sold 1x {card.card_name}")
 
     elif action == 'delete':
         db.session.delete(card)
