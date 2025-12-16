@@ -3,7 +3,7 @@
 {% block styles %}
 <style>
     /* Card Styles for Admin Grid (Matches Public View) */
-    .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; margin-top: 15px; }
+    .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-top: 15px; }
     .card-slot { border-radius: 10px; overflow: hidden; background: #2c3e50; position: relative; aspect-ratio: 2.5/3.5; transition: transform 0.2s; cursor: pointer; border: 2px solid transparent; }
     .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); border-color: #0d6efd; }
     
@@ -105,10 +105,11 @@
 
             <div class="skeleton-loader" id="loader-{{ c.id }}"></div>
             
-            <!-- Smart Image Loading: Use DB URL if available, else mark for fetch -->
+            <!-- Smart Image Loading -->
+            <!-- Uses 1px transparent gif as placeholder so onload can fire when real src is swapped in -->
             <img class="card-image {% if not c.image_url %}needs-fetch{% endif %}" 
                  id="img-{{ c.id }}"
-                 src="{{ c.image_url if c.image_url else '' }}" 
+                 src="{{ c.image_url if c.image_url else 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }}" 
                  alt="{{ c.card_name }}" 
                  loading="lazy"
                  onload="imageLoaded('{{ c.id }}')"
