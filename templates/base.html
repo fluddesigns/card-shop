@@ -64,9 +64,9 @@
                 </div>
 
                 <!-- MOBILE VIEW USER ICON (Stacks normally on mobile) -->
-                <ul class="navbar-nav d-lg-none mb-2 mb-lg-0">
+                <ul class="navbar-nav d-lg-none mb-2 mb-lg-0 align-items-center">
                      <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('profile') }}">
+                        <a class="nav-link d-flex align-items-center" href="{{ url_for('profile') }}">
                             <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center border border-light" style="width: 32px; height: 32px;">
                                 {{ current_user.username[0]|upper }}
                             </div>
