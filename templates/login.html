@@ -1,1 +1,15 @@
-﻿{% extends "base.html" %}{% block title %}Login{% endblock %}{% block content %}<div class="container mt-5" style="max-width:400px"><div class="card shadow"><div class="card-body p-4"><h4 class="text-center mb-3">Login</h4>{% with m=get_flashed_messages() %}{% if m %}<div class="alert alert-danger">{{ m[0] }}</div>{% endif %}{% endwith %}<form method="POST"><div class="mb-3"><label class="form-label">Username</label><input type="text" name="username" class="form-control" required autofocus></div><div class="mb-3"><label class="form-label">Password</label><input type="password" name="password" class="form-control" required></div><div class="d-grid gap-2"><button type="submit" class="btn btn-primary">Login</button><a href="{{ url_for('register') }}" class="btn btn-outline-secondary btn-sm">Create Account</a></div></form></div></div></div>{% endblock %}
+﻿{% extends "base.html" %}{% block title %}Login{% endblock %}{% block content %}<div class="container mt-5"
+    style="max-width:400px">
+    <div class="card shadow">
+        <div class="card-body p-4">
+            <h4 class="text-center mb-3">Login</h4>{% with m=get_flashed_messages() %}{% if m %}<div
+                class="alert alert-danger">{{ m[0] }}</div>{% endif %}{% endwith %}<form method="POST">
+                <div class="mb-3"><label class="form-label">Username</label><input type="text" name="username"
+                        class="form-control" required autofocus></div>
+                <div class="mb-3"><label class="form-label">Password</label><input type="password" name="password"
+                        class="form-control" required></div>
+                <div class="d-grid gap-2"><button type="submit" class="btn btn-primary">Login</button></div>
+            </form>
+        </div>
+    </div>
+</div>{% endblock %}

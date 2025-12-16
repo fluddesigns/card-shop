@@ -2,7 +2,7 @@
 {% block title %}Local Card Market{% endblock %}
 {% block content %}
 <div class="container py-5 text-center">
-    <h1 class="display-4 fw-bold">Local Card Market</h1>
+    <h1 class="display-4 fw-bold">Blake's Local Card Market</h1>
     <p class="lead text-muted mb-5">Trade locally, avoid fees.</p>
     
     <div class="row g-4 justify-content-center">
@@ -19,12 +19,7 @@
         </div>
         {% else %}
         <div class="col-12 text-muted">
-            <h4>No traders yet. Be the first!</h4>
-            {% if not current_user.is_authenticated %}
-            <div class="mt-3">
-                <a href="{{ url_for('register') }}" class="btn btn-primary">Open Your Shop</a>
-            </div>
-            {% endif %}
+            <h4>No traders found.</h4>
         </div>
         {% endfor %}
     </div>

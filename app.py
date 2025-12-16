@@ -98,39 +98,14 @@ def index():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('admin'))
-    
+    # LOCKED DOWN: Registration disabled per user request
     if request.method == 'POST':
-        # 1. Anti-Spam Honeypot Check
-        if request.form.get('hp_check'):
-            return redirect(url_for('index'))
-
-        username = request.form.get('username').lower()
-        password = request.form.get('password')
-        confirm = request.form.get('confirm_password')
-        
-        if password != confirm:
-            flash('Passwords do not match.')
-            return redirect(url_for('register'))
-
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists.')
-            return redirect(url_for('register'))
-            
-        new_user = User(username=username)
-        new_user.set_password(password)
-        
-        if username == 'flud': 
-            new_user.is_admin = True
-        
-        db.session.add(new_user)
-        db.session.commit()
-        
-        login_user(new_user)
-        return redirect(url_for('admin'))
-        
-    return render_template('register.html')
+        flash("Registration is currently disabled.")
+        return redirect(url_for('login'))
+    
+    # If they try to visit the page manually
+    flash("Registration is currently disabled.")
+    return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -370,7 +345,6 @@ def update_card(id):
     if action == 'sold_custom':
         try:
             qty_sold = int(request.form.get('sold_quantity', 1))
-            # Grab the custom total if provided, otherwise default to calc
             total_price_input = request.form.get('sale_total')
             
             if total_price_input:
