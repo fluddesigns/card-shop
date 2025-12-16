@@ -1,39 +1,110 @@
-﻿{% extends "base.html" %}
-
-{% block title %}Local Card Market{% endblock %}
-
-{% block content %}
-<div class="container py-5 text-center">
-    <h1 class="display-4 fw-bold">Local Card Market</h1>
-    <p class="lead text-muted mb-5">Trade locally, avoid fees.</p>
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{% block title %}Card Market{% endblock %}</title>
     
-    <div class="row g-4 justify-content-center">
-        {% for user in users %}
-        <div class="col-md-4 col-sm-6">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                    <h3 class="text-primary">{{ user.username|capitalize }}</h3>
-                    <div class="d-grid gap-2 mt-3">
-                        <!-- Binder link removed to prevent 500 Error -->
-                        <a href="{{ url_for('user_storefront', username=user.username) }}" class="btn btn-outline-dark">Browse Inventory</a>
+    <!-- Shared CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/responsive/2.4.1/css/responsive.bootstrap5.min.css" rel="stylesheet">
+    
+    <style>
+        .pokeball-logo {
+            width: 36px;
+            height: 36px;
+            background: radial-gradient(white 33%, black 33% 40%, transparent 40%),
+                        linear-gradient(to bottom, #e3350d 46%, black 46% 54%, white 54%);
+            border: 2px solid black;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .navbar-custom { background-color: #343a40; }
+        .nav-link { color: rgba(255,255,255,0.8); }
+        .nav-link:hover { color: white; }
+        
+        body { 
+            background-color: #f8f9fa; 
+            padding-top: 70px; 
+            margin: 0;
+        }
+        
+        {% block styles %}{% endblock %}
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand navbar-custom fixed-top navbar-dark shadow">
+        <div class="container-fluid position-relative">
+            <!-- LEFT: Brand -->
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}" title="Home">
+                <div class="pokeball-logo"></div>
+                <span class="d-none d-md-inline ps-2">Home</span>
+            </a>
+
+            <!-- CENTER: User Icon (Absolute Center for ALL screens) -->
+            {% if current_user.is_authenticated %}
+            <div class="position-absolute start-50 top-50 translate-middle" style="z-index: 1050;">
+                <a class="nav-link p-0" href="{{ url_for('profile') }}" title="My Profile">
+                    <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center border border-light shadow-sm" style="width: 42px; height: 42px;">
+                        {{ current_user.username[0]|upper }}
                     </div>
-                </div>
-            </div>
-        </div>
-        {% else %}
-        <div class="col-12 text-muted">
-            <h4>No traders yet. Be the first!</h4>
-            {% if not current_user.is_authenticated %}
-            <div class="mt-3">
-                <a href="{{ url_for('register') }}" class="btn btn-primary">Open Your Shop</a>
+                </a>
             </div>
             {% endif %}
+
+            <!-- Toggler for Mobile -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- RIGHT: Menu Items -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    {% if current_user.is_authenticated %}
+                        <!-- Desktop Dropdown -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                ☰ Menu
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('admin') }}">Inventory Admin</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('sales') }}">Sales History</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('trade_tool') }}">Trade Calculator</a></li>
+                                
+                                {% if current_user.is_admin %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-primary" href="{{ url_for('super_admin') }}">👑 Super Admin</a></li>
+                                {% endif %}
+                                
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('user_storefront', username=current_user.username) }}">Public Storefront</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('user_qr', username=current_user.username) }}">QR Code</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <!-- LOGGED OUT -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="btn btn-primary btn-sm ms-2" href="{{ url_for('register') }}">Join</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
         </div>
-        {% endfor %}
-    </div>
-    
-    <div class="mt-5">
-        <a href="{{ url_for('trade_tool') }}" class="btn btn-success btn-lg">⚖️ Trade Calculator</a>
-    </div>
-</div>
-{% endblock %}
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <!-- Shared Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
+
+</body>
+</html>
