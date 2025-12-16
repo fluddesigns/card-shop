@@ -102,5 +102,14 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
-<script>$(document).ready(function(){ $('#admTable').DataTable({responsive:true, order:[[0,'desc']]}); });</script>
+<script>
+    $(document).ready(function(){ 
+        $('#admTable').DataTable({
+            responsive: true, 
+            order: [[0,'desc']],
+            lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
+            pageLength: 20
+        }); 
+    });
+</script>
 {% endblock %}
