@@ -380,6 +380,11 @@ def update_card(id):
 
             if card.quantity >= qty_sold:
                 card.quantity -= qty_sold
+                
+                # Check if empty immediately after subtracting
+                if card.quantity == 0:
+                    db.session.delete(card)
+
                 # Create Sale Record
                 sale = Sale(
                     user_id=current_user.id,
@@ -397,13 +402,22 @@ def update_card(id):
 
     elif action == 'delete':
         db.session.delete(card)
+        
     elif action == 'update_details':
         try:
             card.price = float(request.form.get('price'))
-            card.quantity = int(request.form.get('quantity'))
+            
+            # Check for manual 0 quantity entry
+            new_qty = int(request.form.get('quantity'))
+            if new_qty <= 0:
+                db.session.delete(card)
+            else:
+                card.quantity = new_qty
+            
             card.condition = request.form.get('condition')
             card.location = request.form.get('location')
         except: flash("Invalid input")
+        
     db.session.commit()
     return redirect(url_for('admin'))
 
