@@ -25,8 +25,9 @@
         .nav-link:hover { color: white; }
         
         body { 
+            background-color: #f8f9fa; 
             /* Match standard bootstrap navbar height exactly to remove white gap */
-            padding-top: 26px; 
+            padding-top: 56px; 
             margin: 0;
         }
     </style>
@@ -69,7 +70,6 @@
                             <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center border border-light" style="width: 32px; height: 32px;">
                                 {{ current_user.username[0]|upper }}
                             </div>
-                            <span>My Profile</span>
                         </a>
                     </li>
                 </ul>
