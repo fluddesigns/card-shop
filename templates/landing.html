@@ -14,9 +14,8 @@
                 <div class="card-body">
                     <h3 class="text-primary">{{ user.username|capitalize }}</h3>
                     <div class="d-grid gap-2 mt-3">
+                        <!-- Binder link removed to prevent 500 Error -->
                         <a href="{{ url_for('user_storefront', username=user.username) }}" class="btn btn-outline-dark">Browse Inventory</a>
-                        <!-- Binder link included since route exists in SaaS version -->
-                        <a href="{{ url_for('user_binder', username=user.username) }}" class="btn btn-outline-secondary">View Binder</a>
                     </div>
                 </div>
             </div>
@@ -26,6 +25,7 @@
             <h4>No traders yet. Be the first!</h4>
             {% if not current_user.is_authenticated %}
             <div class="mt-3">
+                <a href="{{ url_for('register') }}" class="btn btn-primary">Open Your Shop</a>
             </div>
             {% endif %}
         </div>
