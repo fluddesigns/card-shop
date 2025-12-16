@@ -1,18 +1,4 @@
-﻿-fluid position-relative">
-            <!-- LEFT: Brand -->
-            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}" title="Home">
-                <div class="pokeball-logo me-2"></div> Home
-            </a>
-
-            <!-- Toggler for Mobile -->
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-
-            <!-- Navbar Content -->
-            <div class="collapse navbar-collapse" id="navbarNav">
-                {% if current_user.is_authenticated %}
-                <!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -51,7 +37,21 @@
 <body>
 
     <nav class="navbar navbar-expand navbar-custom fixed-top navbar-dark shadow">
-        <div class="container
+        <div class="container-fluid position-relative">
+            <!-- LEFT: Brand -->
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}" title="Home">
+                <div class="pokeball-logo me-2"></div> Home
+            </a>
+
+            <!-- Toggler for Mobile -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- Navbar Content -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+                {% if current_user.is_authenticated %}
+                
                 <!-- CENTER: User Icon (Absolute Center for Desktop) -->
                 <!-- d-none d-lg-block hides this specific centered block on mobile to avoid overlap, 
                      handling mobile centering differently or letting it stack naturally -->
