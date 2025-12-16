@@ -22,25 +22,23 @@
     @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .price-badge { position: absolute; top: 8px; right: 8px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; }
     .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; }
+    
+    /* Filter Bar Styles */
+    .filter-bar { background: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #dee2e6; }
+    .filter-label { font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase; margin-bottom: 4px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Define Critical Handlers Early (Fixes ReferenceError) -->
+<!-- Define Critical Handlers Early -->
 <script>
-    // --- NATIVE HANDLERS (Fast) ---
     function imageLoaded(id) {
         const loader = document.getElementById('loader-' + id);
         const img = document.getElementById('img-' + id);
         if (loader) loader.classList.add('hidden');
         if (img) img.classList.add('loaded');
     }
-
-    function imageFailed(img, id) {
-        // If direct load fails, mark for JS fetch
-        img.classList.add('needs-fetch');
-        // We don't hide loader yet, let JS try to find a replacement
-    }
+    function imageFailed(img, id) { img.classList.add('needs-fetch'); }
 </script>
 
 <div class="shop-header text-center">
@@ -50,12 +48,43 @@
 </div>
 
 <div class="container-fluid px-3">
+    
+    <!-- UNIFIED FILTER BAR -->
+    <div class="filter-bar shadow-sm">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="filter-label">Search</label>
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search by name...">
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="filter-label">Game</label>
+                <select id="filterGame" class="form-select form-select-sm"><option value="">All Games</option></select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="filter-label">Set</label>
+                <select id="filterSet" class="form-select form-select-sm"><option value="">All Sets</option></select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="filter-label">Finish</label>
+                <select id="filterFinish" class="form-select form-select-sm"><option value="">All Finishes</option></select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="filter-label">Condition</label>
+                <select id="filterCondition" class="form-select form-select-sm"><option value="">All Cond.</option></select>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW TOGGLE -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div class="btn-group view-toggle" role="group">
             <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onchange="toggleView('grid')">
             <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
             <input type="radio" class="btn-check" name="viewmode" id="v-list" onchange="toggleView('list')">
             <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
+        </div>
+        <div class="text-muted small">
+            Showing <span id="visibleCount" class="fw-bold">{{ inventory|length }}</span> cards
         </div>
     </div>
 
@@ -65,17 +94,16 @@
         <div class="card-slot card-item" 
              data-game="{{ card.game }}" 
              data-name="{{ card.card_name }}" 
-             data-set="{{ card.set_name }}">
+             data-set="{{ card.set_name }}"
+             data-finish="{{ card.finish }}"
+             data-condition="{{ card.condition }}">
             
             {% if show_prices %}
             <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
             {% endif %}
 
-            <!-- Loader (Hidden by default if JS isn't needed, but toggled by img events) -->
             <div class="skeleton-loader" id="loader-{{ card.id }}"></div>
 
-            <!-- NATIVE IMAGE LOADING (The Fix) -->
-            <!-- If we have a URL, use it immediately. The 'needs-fetch' class tells JS to skip it or process it. -->
             <img class="card-image {% if not card.image_url %}needs-fetch{% endif %}" 
                  id="img-{{ card.id }}"
                  src="{{ card.image_url if card.image_url else '' }}" 
@@ -125,6 +153,8 @@
 <script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
 <script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
 <script>
+    let dataTable;
+
     function toggleView(mode) {
         if(mode === 'grid') {
             $('#view-grid').removeClass('d-none');
@@ -132,22 +162,96 @@
         } else {
             $('#view-grid').addClass('d-none');
             $('#view-list').removeClass('d-none');
-            $('#inventoryTable').DataTable().columns.adjust().responsive.recalc();
+            // Recalc table when shown
+            if(dataTable) dataTable.columns.adjust().responsive.recalc();
         }
     }
 
     $(document).ready(function () {
-        $('#inventoryTable').DataTable({
+        // Initialize DataTable
+        dataTable = $('#inventoryTable').DataTable({
             responsive: true,
             pageLength: 50,
-            language: { search: "", searchPlaceholder: "Search list..." }
+            dom: 't', // Hide default search box (we use our custom one)
+            paging: false, // Show all for now to sync with grid easily
+            columnDefs: [
+                { responsivePriority: 1, targets: 0 }, 
+                { responsivePriority: 2, targets: -2 }
+            ]
         });
+
+        // --- FILTER LOGIC ---
+        
+        // 1. Populate Dropdowns from Existing Data
+        const games = new Set();
+        const sets = new Set();
+        const finishes = new Set();
+        const conditions = new Set();
+
+        $('.card-item').each(function() {
+            games.add($(this).data('game'));
+            sets.add($(this).data('set'));
+            finishes.add($(this).data('finish'));
+            conditions.add($(this).data('condition'));
+        });
+
+        populateSelect('#filterGame', games);
+        populateSelect('#filterSet', sets);
+        populateSelect('#filterFinish', finishes);
+        populateSelect('#filterCondition', conditions);
+
+        function populateSelect(selector, set) {
+            const arr = Array.from(set).filter(Boolean).sort();
+            arr.forEach(val => {
+                $(selector).append(new Option(val, val));
+            });
+        }
+
+        // 2. Event Listeners for Live Filtering
+        $('#searchInput, #filterGame, #filterSet, #filterFinish, #filterCondition').on('keyup change', function() {
+            filterAll();
+        });
+
+        function filterAll() {
+            const search = $('#searchInput').val().toLowerCase();
+            const game = $('#filterGame').val();
+            const set = $('#filterSet').val();
+            const finish = $('#filterFinish').val();
+            const condition = $('#filterCondition').val();
+
+            let visibleCount = 0;
+
+            // Filter Grid
+            $('.card-item').each(function() {
+                const $el = $(this);
+                const matchesSearch = $el.data('name').toLowerCase().includes(search);
+                const matchesGame = !game || $el.data('game') === game;
+                const matchesSet = !set || $el.data('set') === set;
+                const matchesFinish = !finish || $el.data('finish') === finish;
+                const matchesCondition = !condition || $el.data('condition') === condition;
+
+                if (matchesSearch && matchesGame && matchesSet && matchesFinish && matchesCondition) {
+                    $el.show();
+                    visibleCount++;
+                } else {
+                    $el.hide();
+                }
+            });
+
+            // Filter Table (Using Regex for exact matches on dropdowns, fuzzy for search)
+            // Column Indices: 0=Name, 1=Set, 2=Game, 3=Finish, 4=Cond
+            dataTable.search(search).draw(); // Global fuzzy search
+            dataTable.column(2).search(game ? '^'+$.fn.dataTable.util.escapeRegex(game)+'$' : '', true, false).draw();
+            dataTable.column(1).search(set ? '^'+$.fn.dataTable.util.escapeRegex(set)+'$' : '', true, false).draw();
+            dataTable.column(3).search(finish ? '^'+$.fn.dataTable.util.escapeRegex(finish)+'$' : '', true, false).draw();
+            dataTable.column(4).search(condition ? '^'+$.fn.dataTable.util.escapeRegex(condition)+'$' : '', true, false).draw();
+
+            $('#visibleCount').text(visibleCount);
+        }
     });
 
     // --- API FALLBACK QUEUE (Slow/Safe) ---
-    // Only runs for cards that lack a URL in DB or failed to load
     document.addEventListener("DOMContentLoaded", function() {
-        // Select only images marked as needing fetch
         const queue = Array.from(document.querySelectorAll('img.needs-fetch'));
         const RATE_LIMIT_DELAY = 150; 
         
@@ -156,9 +260,7 @@
         function processNext() {
             if (queue.length === 0) return;
             const img = queue.shift();
-            // Find parent container to get data attributes
             const cardSlot = img.closest('.card-slot');
-            
             if (cardSlot) {
                 fetchCardImage(cardSlot, img).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
             } else {
@@ -170,22 +272,18 @@
             const game = (card.dataset.game || "").toLowerCase();
             const name = card.dataset.name;
             const set = (card.dataset.set || "").trim();
-            const loader = card.querySelector('.skeleton-loader');
 
             try {
                 if (game.includes('magic') || game.includes('mtg')) {
                     let query = `https://api.scryfall.com/cards/search?q=name:"${encodeURIComponent(name)}"`;
                     if (set) query += `+set:"${encodeURIComponent(set)}"`;
-                    
                     let r = await fetch(query);
                     if (!r.ok) r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-                    
                     if(!r.ok) throw new Error("404");
                     const d = await r.json();
                     let target = d.data && d.data.length > 0 ? d.data[0] : d;
-
-                    if (target.image_uris) applySrc(imgEl, loader, target.image_uris.normal);
-                    else if (target.card_faces) applySrc(imgEl, loader, target.card_faces[0].image_uris.normal);
+                    if (target.image_uris) applySrc(imgEl, target.image_uris.normal);
+                    else if (target.card_faces) applySrc(imgEl, target.card_faces[0].image_uris.normal);
                     else throw new Error("No Img");
                 } 
                 else if (game.includes('pokemon') || game.includes('pkmn')) {
@@ -194,32 +292,22 @@
                     if (set) query += ` set.name:"${encodeURIComponent(set)}"`;
                     let r = await fetch(query);
                     let d = await r.json();
-                    
-                    if (!d.data || d.data.length === 0) {
-                         r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`);
-                         d = await r.json();
-                    }
-                    if (d.data && d.data.length > 0) applySrc(imgEl, loader, d.data[0].images.small);
+                    if (!d.data || d.data.length === 0) { r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`); d = await r.json(); }
+                    if (d.data && d.data.length > 0) applySrc(imgEl, d.data[0].images.small);
                     else throw new Error("No Img");
                 } 
-                else { loadFallback(imgEl, loader, 'default'); }
-            } catch (error) {
-                loadFallback(imgEl, loader, game.includes('pokemon') ? 'pokemon' : 'default');
-            }
+                else { loadFallback(imgEl, 'default'); }
+            } catch (error) { loadFallback(imgEl, game.includes('pokemon') ? 'pokemon' : 'default'); }
         }
 
-        function applySrc(img, loader, src) {
-            img.src = src;
-            // Native onload handler will trigger 'imageLoaded'
-        }
+        function applySrc(img, src) { img.src = src; }
 
-        function loadFallback(img, loader, type) {
+        function loadFallback(img, type) {
             let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
             if (type === 'pokemon') backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
             img.src = backSrc; 
             img.style.opacity = "0.3"; 
-            if (loader) loader.classList.add('hidden');
-            img.classList.add('loaded');
+            // Loader hiding is handled by native onerror/onload events defined in HTML
         }
     });
 </script>
