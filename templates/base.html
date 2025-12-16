@@ -26,7 +26,7 @@
         
         body { 
             background-color: #f8f9fa; 
-            padding-top: 70px; 
+            padding-top: 70px; /* Fix for fixed-top navbar overlapping content */
             margin: 0;
         }
         
@@ -48,7 +48,7 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
                     
-                    {% if session.get('logged_in') %}
+                    {% if current_user.is_authenticated %}
                         <!-- LOGGED IN: Dropdown Menu -->
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -56,16 +56,28 @@
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdown">
                                 <li><a class="dropdown-item" href="{{ url_for('admin') }}">Admin Panel</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('trade_tool') }}">Trade Calculator</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('index') }}">Public Storefront</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('user_storefront', username=current_user.username) }}">Public Storefront</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('user_qr', username=current_user.username) }}">QR Code</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a></li>
                             </ul>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('profile') }}" title="My Profile">
+                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                                    {{ current_user.username[0]|upper }}
+                                </div>
+                            </a>
+                        </li>
                     {% else %}
                         <!-- LOGGED OUT -->
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('login') }}">Owner Login</a>
+                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="btn btn-primary btn-sm ms-2" href="{{ url_for('register') }}">Join</a>
                         </li>
                     {% endif %}
                 </ul>
