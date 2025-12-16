@@ -28,6 +28,7 @@ class User(UserMixin, db.Model):
     # Admin Flag
     is_admin = db.Column(db.Boolean, default=False)
     cards = db.relationship('Card', backref='owner', lazy=True, cascade="all, delete-orphan")
+    sales = db.relationship('Sale', backref='seller', lazy=True, cascade="all, delete-orphan")
     settings = db.relationship('Settings', backref='owner', uselist=False, cascade="all, delete-orphan")
 
     def set_password(self, password):
@@ -60,6 +61,15 @@ class Card(db.Model):
     variant = db.Column(db.String(100))
     location = db.Column(db.String(100))
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Sale(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    card_name = db.Column(db.String(150), nullable=False)
+    set_name = db.Column(db.String(100))
+    sale_price = db.Column(db.Float, default=0.0)
+    quantity = db.Column(db.Integer, default=1)
+    sale_date = db.Column(db.DateTime, default=datetime.utcnow)
 
 with app.app_context():
     db.create_all()
@@ -186,8 +196,6 @@ def trade_tool():
     users = User.query.all()
     return render_template('trade.html', users=users)
 
-# --- API ENDPOINTS ---
-
 @app.route('/api/inventory/<username>')
 def api_inventory(username):
     user = User.query.filter_by(username=username.lower()).first_or_404()
@@ -215,6 +223,14 @@ def admin():
     settings = get_user_settings(current_user.id)
     inventory = Card.query.filter_by(user_id=current_user.id).order_by(Card.id.desc()).all()
     return render_template('admin.html', inventory=inventory, settings=settings)
+
+@app.route('/sales')
+@login_required
+def sales():
+    # Fetch sales history for current user
+    sales_history = Sale.query.filter_by(user_id=current_user.id).order_by(Sale.sale_date.desc()).all()
+    total_revenue = sum(s.sale_price for s in sales_history)
+    return render_template('sales.html', sales=sales_history, total=total_revenue)
 
 # --- SUPER ADMIN ROUTES ---
 
@@ -367,7 +383,19 @@ def update_card(id):
 
     action = request.form.get('action')
     if action == 'sold_one':
-        if card.quantity > 0: card.quantity -= 1
+        if card.quantity > 0: 
+            card.quantity -= 1
+            # CREATE SALE RECORD
+            sale = Sale(
+                user_id=current_user.id,
+                card_name=card.card_name,
+                set_name=card.set_name,
+                sale_price=card.price,
+                quantity=1
+            )
+            db.session.add(sale)
+            flash(f"Sold 1x {card.card_name} for ${card.price:.2f}")
+
     elif action == 'delete':
         db.session.delete(card)
     elif action == 'update_details':
