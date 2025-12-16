@@ -72,7 +72,7 @@ class Sale(db.Model):
 
 with app.app_context():
     db.create_all()
-    # Auto-promote 'flud'
+    # Auto-promote 'flud' logic on startup
     admin_user = User.query.filter_by(username='flud').first()
     if admin_user and not admin_user.is_admin:
         admin_user.is_admin = True
@@ -92,6 +92,7 @@ def get_user_settings(user_id):
 
 @app.route('/')
 def index():
+    # Landing page listing all active traders
     users = User.query.all()
     return render_template('landing.html', users=users)
 
@@ -101,7 +102,9 @@ def register():
         return redirect(url_for('admin'))
     
     if request.method == 'POST':
-        if request.form.get('hp_check'): return redirect(url_for('index'))
+        # 1. Anti-Spam Honeypot Check
+        if request.form.get('hp_check'):
+            return redirect(url_for('index'))
 
         username = request.form.get('username').lower()
         password = request.form.get('password')
@@ -117,7 +120,9 @@ def register():
             
         new_user = User(username=username)
         new_user.set_password(password)
-        if username == 'flud': new_user.is_admin = True
+        
+        if username == 'flud': 
+            new_user.is_admin = True
         
         db.session.add(new_user)
         db.session.commit()
@@ -138,6 +143,10 @@ def login():
         
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
+            if user.username == 'flud' and not user.is_admin:
+                user.is_admin = True
+                db.session.commit()
+                
             login_user(user)
             return redirect(url_for('admin'))
             
@@ -205,7 +214,6 @@ def admin():
 @app.route('/sales')
 @login_required
 def sales():
-    # Fetch sales history for current user
     sales_history = Sale.query.filter_by(user_id=current_user.id).order_by(Sale.sale_date.desc()).all()
     total_revenue = sum(s.sale_price for s in sales_history)
     return render_template('sales.html', sales=sales_history, total=total_revenue)
@@ -272,7 +280,7 @@ def add_card():
         )
         db.session.add(new_card)
         db.session.commit()
-        flash(f'Added {new_card.card_name}')
+        flash(f'Added {new_card.card_name} to inventory.')
     except Exception as e:
         flash(f'Error adding card: {str(e)}')
     return redirect(url_for('admin'))
@@ -359,10 +367,17 @@ def update_card(id):
 
     action = request.form.get('action')
     
-    # NEW: Logic for Custom Quantity Sales
     if action == 'sold_custom':
         try:
             qty_sold = int(request.form.get('sold_quantity', 1))
+            # Grab the custom total if provided, otherwise default to calc
+            total_price_input = request.form.get('sale_total')
+            
+            if total_price_input:
+                final_sale_price = float(total_price_input)
+            else:
+                final_sale_price = card.price * qty_sold
+
             if card.quantity >= qty_sold:
                 card.quantity -= qty_sold
                 # Create Sale Record
@@ -370,29 +385,15 @@ def update_card(id):
                     user_id=current_user.id,
                     card_name=card.card_name,
                     set_name=card.set_name,
-                    # Calculate total transaction value
-                    sale_price=card.price * qty_sold, 
+                    sale_price=final_sale_price,
                     quantity=qty_sold
                 )
                 db.session.add(sale)
-                flash(f"Sold {qty_sold}x {card.card_name}")
+                flash(f"Sold {qty_sold}x {card.card_name} for ${final_sale_price:.2f}")
             else:
                 flash("Not enough quantity.")
         except ValueError:
-            flash("Invalid quantity.")
-
-    elif action == 'sold_one':
-        if card.quantity > 0: 
-            card.quantity -= 1
-            sale = Sale(
-                user_id=current_user.id, 
-                card_name=card.card_name, 
-                set_name=card.set_name, 
-                sale_price=card.price, 
-                quantity=1
-            )
-            db.session.add(sale)
-            flash(f"Sold 1x {card.card_name}")
+            flash("Invalid quantity or price.")
 
     elif action == 'delete':
         db.session.delete(card)
