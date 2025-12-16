@@ -1,4 +1,18 @@
-﻿<!DOCTYPE html>
+﻿-fluid position-relative">
+            <!-- LEFT: Brand -->
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}" title="Home">
+                <div class="pokeball-logo me-2"></div> Home
+            </a>
+
+            <!-- Toggler for Mobile -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- Navbar Content -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+                {% if current_user.is_authenticated %}
+                <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -26,7 +40,8 @@
         
         body { 
             background-color: #f8f9fa; 
-            padding-top: 70px; 
+            /* Match standard bootstrap navbar height exactly to remove white gap */
+            padding-top: 56px; 
             margin: 0;
         }
     </style>
@@ -36,28 +51,26 @@
 <body>
 
     <nav class="navbar navbar-expand navbar-custom fixed-top navbar-dark shadow">
-        <div class="container-fluid">
-            <!-- LEFT: Brand -->
-            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}" title="Home">
-                <div class="pokeball-logo me-2"></div> Home
-            </a>
+        <div class="container
+                <!-- CENTER: User Icon (Absolute Center for Desktop) -->
+                <!-- d-none d-lg-block hides this specific centered block on mobile to avoid overlap, 
+                     handling mobile centering differently or letting it stack naturally -->
+                <div class="position-absolute start-50 translate-middle-x d-none d-lg-block">
+                    <a class="nav-link" href="{{ url_for('profile') }}" title="My Profile">
+                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center border border-light shadow-sm" style="width: 42px; height: 42px;">
+                            {{ current_user.username[0]|upper }}
+                        </div>
+                    </a>
+                </div>
 
-            <!-- Toggler for Mobile -->
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-
-            <!-- Navbar Content -->
-            <div class="collapse navbar-collapse" id="navbarNav">
-                {% if current_user.is_authenticated %}
-                
-                <!-- CENTER: User Icon -->
-                <ul class="navbar-nav mx-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('profile') }}" title="My Profile">
-                            <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center border border-light" style="width: 40px; height: 40px;">
+                <!-- MOBILE VIEW USER ICON (Stacks normally on mobile) -->
+                <ul class="navbar-nav d-lg-none mb-2 mb-lg-0">
+                     <li class="nav-item">
+                        <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('profile') }}">
+                            <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center border border-light" style="width: 32px; height: 32px;">
                                 {{ current_user.username[0]|upper }}
                             </div>
+                            <span>My Profile</span>
                         </a>
                     </li>
                 </ul>
