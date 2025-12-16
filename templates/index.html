@@ -1,18 +1,12 @@
 ﻿{% extends "base.html" %}
 
-{% block title %}Inventory - {{ owner.username }}{% endblock %}
+{% block title %}My Inventory{% endblock %}
 
 {% block styles %}
 <style>
     .shop-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2rem 1rem; text-align: center; border-radius: 0 0 15px 15px; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
     .contact-badge { background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; display: inline-block; margin-top: 10px; backdrop-filter: blur(5px); }
-    
-    /* Toggle Switches */
-    .view-toggle .btn-check:checked + .btn-outline-primary {
-        background-color: #1e3c72; border-color: #1e3c72; color: white;
-    }
-
-    /* Grid/Binder View Styles */
+    .view-toggle .btn-check:checked + .btn-outline-primary { background-color: #1e3c72; border-color: #1e3c72; color: white; }
     .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
     .card-slot { border: none; border-radius: 10px; overflow: hidden; background: #2c3e50; position: relative; aspect-ratio: 2.5/3.5; transition: transform 0.2s; cursor: pointer; }
     .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); }
@@ -26,8 +20,9 @@
 
 {% block content %}
 <div class="shop-header text-center">
-    <h1 class="fw-bold">{{ owner.username|capitalize }}'s Collection</h1>
-    <p class="mb-0 opacity-75">Browse available singles.</p>
+    <h1 class="fw-bold">My Card Collection</h1>
+    <p class="mb-0 opacity-75">Browse available singles. Updated daily.</p>
+    <div class="contact-badge">👋 {{ contact_info }}</div>
 </div>
 
 <div class="container-fluid px-3">
@@ -46,15 +41,12 @@
         <div class="card-slot card-item" 
              data-game="{{ card.game }}" 
              data-name="{{ card.card_name }}" 
-             data-set="{{ card.set_name }}">
+             data-set="{{ card.set_name }}"
+             data-image="{{ card.image_url }}">
             
-            {% if show_prices %}
-            <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
-            {% endif %}
-
+            {% if show_prices %}<div class="price-badge">${{ "%.2f"|format(card.price) }}</div>{% endif %}
             <div class="skeleton-loader"></div>
             <img class="card-image d-none" alt="{{ card.card_name }}" loading="lazy">
-            
             <div class="info-overlay">
                 <div class="text-truncate fw-bold">{{ card.card_name }}</div>
                 <div class="opacity-75">{{ card.set_name }} • {{ card.condition }}</div>
@@ -97,27 +89,14 @@
 <script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
 <script>
     function toggleView(mode) {
-        if(mode === 'grid') {
-            $('#view-grid').removeClass('d-none');
-            $('#view-list').addClass('d-none');
-        } else {
-            $('#view-grid').addClass('d-none');
-            $('#view-list').removeClass('d-none');
-            $('#inventoryTable').DataTable().columns.adjust().responsive.recalc();
-        }
+        if(mode === 'grid') { $('#view-grid').removeClass('d-none'); $('#view-list').addClass('d-none'); } 
+        else { $('#view-grid').addClass('d-none'); $('#view-list').removeClass('d-none'); $('#inventoryTable').DataTable().columns.adjust().responsive.recalc(); }
     }
-
-    $(document).ready(function () {
-        $('#inventoryTable').DataTable({
-            responsive: true,
-            pageLength: 50,
-            language: { search: "", searchPlaceholder: "Search list..." }
-        });
-    });
+    $(document).ready(function () { $('#inventoryTable').DataTable({ responsive: true, pageLength: 50 }); });
 
     document.addEventListener("DOMContentLoaded", function() {
         const queue = Array.from(document.querySelectorAll('.card-slot'));
-        const RATE_LIMIT_DELAY = 150; 
+        const RATE_LIMIT_DELAY = 100; // Faster now because most cards will use CSV URL
         processNext();
 
         function processNext() {
@@ -127,26 +106,30 @@
         }
 
         async function fetchCardImage(card) {
+            const imgEl = card.querySelector('img');
+            const loader = card.querySelector('.skeleton-loader');
+            const directUrl = card.dataset.image;
+
+            // STRATEGY 1: Use URL from CSV (Fastest & Best)
+            if (directUrl && directUrl.startsWith('http')) {
+                loadImage(imgEl, loader, directUrl);
+                return;
+            }
+
+            // STRATEGY 2: Fallback to APIs (Slow)
             const game = (card.dataset.game || "").toLowerCase();
             const name = card.dataset.name;
             const set = (card.dataset.set || "").trim();
-            const imgEl = card.querySelector('img');
-            const loader = card.querySelector('.skeleton-loader');
 
             try {
                 if (game.includes('magic') || game.includes('mtg')) {
                     let query = `https://api.scryfall.com/cards/search?q=name:"${encodeURIComponent(name)}"`;
                     if (set) query += `+set:"${encodeURIComponent(set)}"`;
-                    
                     let r = await fetch(query);
                     if (!r.ok) r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-                    
                     if(!r.ok) throw new Error("404");
                     const d = await r.json();
-                    
-                    let target = d;
-                    if(d.data && d.data.length > 0) target = d.data[0];
-
+                    let target = d.data && d.data.length > 0 ? d.data[0] : d;
                     if (target.image_uris) loadImage(imgEl, loader, target.image_uris.normal);
                     else if (target.card_faces) loadImage(imgEl, loader, target.card_faces[0].image_uris.normal);
                     else throw new Error("No Img");
@@ -155,15 +138,9 @@
                     const cleanName = name.split('(')[0].trim();
                     let query = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`;
                     if (set) query += ` set.name:"${encodeURIComponent(set)}"`;
-                    
                     let r = await fetch(query);
                     let d = await r.json();
-                    
-                    if (!d.data || d.data.length === 0) {
-                         r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`);
-                         d = await r.json();
-                    }
-
+                    if (!d.data || d.data.length === 0) { r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`); d = await r.json(); }
                     if (d.data && d.data.length > 0) loadImage(imgEl, loader, d.data[0].images.small);
                     else throw new Error("No Img");
                 } 
