@@ -24,7 +24,6 @@
         .nav-link { color: rgba(255,255,255,0.8); }
         .nav-link:hover { color: white; }
         
-        /* FIX: Ensure body has no margin and padding for fixed nav */
         body { 
             background-color: #f8f9fa; 
             padding-top: 70px; 
@@ -36,7 +35,6 @@
 </head>
 <body>
 
-    <!-- FIX: Changed sticky-top to fixed-top and added shadow -->
     <nav class="navbar navbar-expand navbar-custom fixed-top navbar-dark shadow">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}" title="Home">
@@ -51,12 +49,18 @@
                 <ul class="navbar-nav ms-auto align-items-center">
                     
                     {% if session.get('logged_in') %}
-                        <!-- LOGGED IN: Single User Mode -->
-                        <li class="nav-item">
-                            <a class="nav-link text-warning" href="{{ url_for('admin') }}">Admin Panel</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                        <!-- LOGGED IN: Dropdown Menu -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                ☰ Menu
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('admin') }}">Admin Panel</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('index') }}">Public Storefront</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a></li>
+                            </ul>
                         </li>
                     {% else %}
                         <!-- LOGGED OUT -->
