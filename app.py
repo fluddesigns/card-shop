@@ -25,8 +25,10 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
-    cards = db.relationship('Card', backref='owner', lazy=True)
-    settings = db.relationship('Settings', backref='owner', uselist=False)
+    # RESTORED: Admin Flag
+    is_admin = db.Column(db.Boolean, default=False)
+    cards = db.relationship('Card', backref='owner', lazy=True, cascade="all, delete-orphan")
+    settings = db.relationship('Settings', backref='owner', uselist=False, cascade="all, delete-orphan")
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -61,6 +63,11 @@ class Card(db.Model):
 
 with app.app_context():
     db.create_all()
+    # RESTORED: Auto-promote 'flud'
+    admin_user = User.query.filter_by(username='flud').first()
+    if admin_user and not admin_user.is_admin:
+        admin_user.is_admin = True
+        db.session.commit()
 
 # --- Helper Functions ---
 
@@ -76,7 +83,6 @@ def get_user_settings(user_id):
 
 @app.route('/')
 def index():
-    # Landing page listing all active traders
     users = User.query.all()
     return render_template('landing.html', users=users)
 
@@ -86,16 +92,13 @@ def register():
         return redirect(url_for('admin'))
     
     if request.method == 'POST':
-        # 1. Anti-Spam Honeypot Check
-        if request.form.get('hp_check'):
-            # If this hidden field is filled, it's a bot. Fail silently or redirect.
-            return redirect(url_for('index'))
+        # Honeypot
+        if request.form.get('hp_check'): return redirect(url_for('index'))
 
         username = request.form.get('username').lower()
         password = request.form.get('password')
         confirm = request.form.get('confirm_password')
         
-        # 2. Validation
         if password != confirm:
             flash('Passwords do not match.')
             return redirect(url_for('register'))
@@ -106,6 +109,10 @@ def register():
             
         new_user = User(username=username)
         new_user.set_password(password)
+        
+        # RESTORED: Immediate Promotion
+        if username == 'flud': new_user.is_admin = True
+        
         db.session.add(new_user)
         db.session.commit()
         
@@ -142,22 +149,13 @@ def logout():
 def profile():
     return render_template('profile.html', user=current_user)
 
-# --- PUBLIC STOREFRONTS ---
-
 @app.route('/u/<username>')
 def user_storefront(username):
     user = User.query.filter_by(username=username.lower()).first_or_404()
     settings = get_user_settings(user.id)
-    # Only show in-stock items
-    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).all()
+    # Default Sort High to Low
+    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).order_by(Card.price.desc()).all()
     return render_template('index.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
-
-@app.route('/u/<username>/binder')
-def user_binder(username):
-    user = User.query.filter_by(username=username.lower()).first_or_404()
-    settings = get_user_settings(user.id)
-    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).all()
-    return render_template('binder.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
 
 @app.route('/u/<username>/qr')
 def user_qr(username):
@@ -168,8 +166,6 @@ def user_qr(username):
 def trade_tool():
     users = User.query.all()
     return render_template('trade.html', users=users)
-
-# --- API ENDPOINTS ---
 
 @app.route('/api/inventory/<username>')
 def api_inventory(username):
@@ -198,6 +194,40 @@ def admin():
     settings = get_user_settings(current_user.id)
     inventory = Card.query.filter_by(user_id=current_user.id).order_by(Card.id.desc()).all()
     return render_template('admin.html', inventory=inventory, settings=settings)
+
+# --- RESTORED: SUPER ADMIN ROUTES ---
+
+@app.route('/super_admin')
+@login_required
+def super_admin():
+    if not current_user.is_admin:
+        flash("Unauthorized")
+        return redirect(url_for('admin'))
+    
+    users = User.query.all()
+    user_stats = []
+    for u in users:
+        count = Card.query.filter_by(user_id=u.id).count()
+        user_stats.append({'user': u, 'card_count': count})
+        
+    return render_template('super_admin.html', stats=user_stats)
+
+@app.route('/delete_user/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
+        flash("Unauthorized")
+        return redirect(url_for('admin'))
+        
+    user_to_delete = User.query.get_or_404(user_id)
+    if user_to_delete.username == 'flud':
+        flash("Cannot delete Super Admin!")
+        return redirect(url_for('super_admin'))
+        
+    db.session.delete(user_to_delete)
+    db.session.commit()
+    flash(f"User {user_to_delete.username} deleted.")
+    return redirect(url_for('super_admin'))
 
 @app.route('/update_settings', methods=['POST'])
 @login_required
