@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Super Admin{% endblock %}
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>👑 Super Admin Dashboard</h2>
+        <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary">Back to My Inventory</a>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}<div class="alert alert-info">{{ messages[0] }}</div>{% endif %}
+    {% endwith %}
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">User Management</div>
+        <div class="card-body p-0">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Cards in Inventory</th>
+                        <th>Role</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in stats %}
+                    <tr>
+                        <td class="fw-bold">{{ stat.user.username }}</td>
+                        <td>{{ stat.card_count }}</td>
+                        <td>
+                            {% if stat.user.is_admin %}
+                            <span class="badge bg-warning text-dark">Super Admin</span>
+                            {% else %}
+                            <span class="badge bg-secondary">User</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not stat.user.is_admin %}
+                            <form action="{{ url_for('delete_user', user_id=stat.user.id) }}" method="POST" class="d-inline">
+                                <button class="btn btn-danger btn-sm" onclick="return confirm('Are you sure? This will delete all their cards and data.')">Delete User</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

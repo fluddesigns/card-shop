@@ -23,7 +23,6 @@
     .price-badge { position: absolute; top: 8px; right: 8px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; }
     .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; }
     
-    /* Filter Bar Styles */
     .filter-bar { background: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #dee2e6; }
     .filter-label { font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase; margin-bottom: 4px; }
 </style>
@@ -52,9 +51,18 @@
     <!-- UNIFIED FILTER BAR -->
     <div class="filter-bar shadow-sm">
         <div class="row g-2 align-items-end">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="filter-label">Search</label>
                 <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search by name...">
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="filter-label">Sort By</label>
+                <select id="sortGrid" class="form-select form-select-sm">
+                    <option value="price-desc" selected>Price: High to Low</option>
+                    <option value="price-asc">Price: Low to High</option>
+                    <option value="name-asc">Name: A to Z</option>
+                    <option value="set-asc">Set: A to Z</option>
+                </select>
             </div>
             <div class="col-6 col-md-2">
                 <label class="filter-label">Game</label>
@@ -64,26 +72,18 @@
                 <label class="filter-label">Set</label>
                 <select id="filterSet" class="form-select form-select-sm"><option value="">All Sets</option></select>
             </div>
-            <div class="col-6 col-md-2">
-                <label class="filter-label">Finish</label>
-                <select id="filterFinish" class="form-select form-select-sm"><option value="">All Finishes</option></select>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="filter-label">Condition</label>
-                <select id="filterCondition" class="form-select form-select-sm"><option value="">All Cond.</option></select>
+            <div class="col-6 col-md-3">
+                <div class="d-flex justify-content-end align-items-end h-100">
+                    <div class="btn-group view-toggle" role="group">
+                        <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onchange="toggleView('grid')">
+                        <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
+                        <input type="radio" class="btn-check" name="viewmode" id="v-list" onchange="toggleView('list')">
+                        <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-
-    <!-- VIEW TOGGLE -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="btn-group view-toggle" role="group">
-            <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onchange="toggleView('grid')">
-            <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
-            <input type="radio" class="btn-check" name="viewmode" id="v-list" onchange="toggleView('list')">
-            <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
-        </div>
-        <div class="text-muted small">
+        <div class="mt-2 text-muted small text-end">
             Showing <span id="visibleCount" class="fw-bold">{{ inventory|length }}</span> cards
         </div>
     </div>
@@ -96,7 +96,8 @@
              data-name="{{ card.card_name }}" 
              data-set="{{ card.set_name }}"
              data-finish="{{ card.finish }}"
-             data-condition="{{ card.condition }}">
+             data-condition="{{ card.condition }}"
+             data-price="{{ card.price }}">
             
             {% if show_prices %}
             <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
@@ -162,75 +163,80 @@
         } else {
             $('#view-grid').addClass('d-none');
             $('#view-list').removeClass('d-none');
-            // Recalc table when shown
             if(dataTable) dataTable.columns.adjust().responsive.recalc();
         }
     }
 
     $(document).ready(function () {
-        // Initialize DataTable
         dataTable = $('#inventoryTable').DataTable({
             responsive: true,
             pageLength: 50,
-            dom: 't', // Hide default search box (we use our custom one)
-            paging: false, // Show all for now to sync with grid easily
+            dom: 't', 
+            paging: false, 
+            order: [[5, 'desc']], // Column 5 is Price if visible
             columnDefs: [
                 { responsivePriority: 1, targets: 0 }, 
                 { responsivePriority: 2, targets: -2 }
             ]
         });
 
-        // --- FILTER LOGIC ---
-        
-        // 1. Populate Dropdowns from Existing Data
+        // POPULATE DROPDOWNS
         const games = new Set();
         const sets = new Set();
-        const finishes = new Set();
-        const conditions = new Set();
-
         $('.card-item').each(function() {
             games.add($(this).data('game'));
             sets.add($(this).data('set'));
-            finishes.add($(this).data('finish'));
-            conditions.add($(this).data('condition'));
         });
-
         populateSelect('#filterGame', games);
         populateSelect('#filterSet', sets);
-        populateSelect('#filterFinish', finishes);
-        populateSelect('#filterCondition', conditions);
 
         function populateSelect(selector, set) {
-            const arr = Array.from(set).filter(Boolean).sort();
-            arr.forEach(val => {
+            Array.from(set).filter(Boolean).sort().forEach(val => {
                 $(selector).append(new Option(val, val));
             });
         }
 
-        // 2. Event Listeners for Live Filtering
-        $('#searchInput, #filterGame, #filterSet, #filterFinish, #filterCondition').on('keyup change', function() {
+        // FILTER EVENT
+        $('#searchInput, #filterGame, #filterSet').on('keyup change', function() {
             filterAll();
+        });
+
+        // SORT EVENT
+        $('#sortGrid').on('change', function() {
+            const sortType = $(this).val();
+            const $grid = $('#view-grid');
+            const $cards = $grid.children('.card-slot');
+
+            $cards.sort(function(a, b) {
+                let valA, valB;
+                switch(sortType) {
+                    case 'price-desc':
+                        return (parseFloat($(b).data('price')) || 0) - (parseFloat($(a).data('price')) || 0);
+                    case 'price-asc':
+                        return (parseFloat($(a).data('price')) || 0) - (parseFloat($(b).data('price')) || 0);
+                    case 'name-asc':
+                        return $(a).data('name').localeCompare($(b).data('name'));
+                    case 'set-asc':
+                        return $(a).data('set').localeCompare($(b).data('set'));
+                    default: return 0;
+                }
+            });
+            $cards.detach().appendTo($grid);
         });
 
         function filterAll() {
             const search = $('#searchInput').val().toLowerCase();
             const game = $('#filterGame').val();
             const set = $('#filterSet').val();
-            const finish = $('#filterFinish').val();
-            const condition = $('#filterCondition').val();
-
             let visibleCount = 0;
 
-            // Filter Grid
             $('.card-item').each(function() {
                 const $el = $(this);
                 const matchesSearch = $el.data('name').toLowerCase().includes(search);
                 const matchesGame = !game || $el.data('game') === game;
                 const matchesSet = !set || $el.data('set') === set;
-                const matchesFinish = !finish || $el.data('finish') === finish;
-                const matchesCondition = !condition || $el.data('condition') === condition;
 
-                if (matchesSearch && matchesGame && matchesSet && matchesFinish && matchesCondition) {
+                if (matchesSearch && matchesGame && matchesSet) {
                     $el.show();
                     visibleCount++;
                 } else {
@@ -238,14 +244,10 @@
                 }
             });
 
-            // Filter Table (Using Regex for exact matches on dropdowns, fuzzy for search)
-            // Column Indices: 0=Name, 1=Set, 2=Game, 3=Finish, 4=Cond
-            dataTable.search(search).draw(); // Global fuzzy search
+            dataTable.search(search).draw();
             dataTable.column(2).search(game ? '^'+$.fn.dataTable.util.escapeRegex(game)+'$' : '', true, false).draw();
             dataTable.column(1).search(set ? '^'+$.fn.dataTable.util.escapeRegex(set)+'$' : '', true, false).draw();
-            dataTable.column(3).search(finish ? '^'+$.fn.dataTable.util.escapeRegex(finish)+'$' : '', true, false).draw();
-            dataTable.column(4).search(condition ? '^'+$.fn.dataTable.util.escapeRegex(condition)+'$' : '', true, false).draw();
-
+            
             $('#visibleCount').text(visibleCount);
         }
     });
@@ -254,20 +256,15 @@
     document.addEventListener("DOMContentLoaded", function() {
         const queue = Array.from(document.querySelectorAll('img.needs-fetch'));
         const RATE_LIMIT_DELAY = 150; 
-        
         processNext();
-
         function processNext() {
             if (queue.length === 0) return;
             const img = queue.shift();
             const cardSlot = img.closest('.card-slot');
             if (cardSlot) {
                 fetchCardImage(cardSlot, img).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
-            } else {
-                processNext();
-            }
+            } else { processNext(); }
         }
-
         async function fetchCardImage(card, imgEl) {
             const game = (card.dataset.game || "").toLowerCase();
             const name = card.dataset.name;
@@ -299,15 +296,14 @@
                 else { loadFallback(imgEl, 'default'); }
             } catch (error) { loadFallback(imgEl, game.includes('pokemon') ? 'pokemon' : 'default'); }
         }
-
         function applySrc(img, src) { img.src = src; }
-
         function loadFallback(img, type) {
             let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
             if (type === 'pokemon') backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
-            img.src = backSrc; 
-            img.style.opacity = "0.3"; 
-            // Loader hiding is handled by native onerror/onload events defined in HTML
+            img.src = backSrc; img.style.opacity = "0.3"; 
+            img.classList.add('loaded'); // Hide loader
+            const loader = img.previousElementSibling;
+            if(loader) loader.classList.add('hidden');
         }
     });
 </script>
