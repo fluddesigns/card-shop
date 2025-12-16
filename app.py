@@ -25,8 +25,10 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
-    cards = db.relationship('Card', backref='owner', lazy=True)
-    settings = db.relationship('Settings', backref='owner', uselist=False)
+    # Admin Flag
+    is_admin = db.Column(db.Boolean, default=False)
+    cards = db.relationship('Card', backref='owner', lazy=True, cascade="all, delete-orphan")
+    settings = db.relationship('Settings', backref='owner', uselist=False, cascade="all, delete-orphan")
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -61,6 +63,11 @@ class Card(db.Model):
 
 with app.app_context():
     db.create_all()
+    # Auto-promote 'flud' logic on startup
+    admin_user = User.query.filter_by(username='flud').first()
+    if admin_user and not admin_user.is_admin:
+        admin_user.is_admin = True
+        db.session.commit()
 
 # --- Helper Functions ---
 
@@ -106,6 +113,11 @@ def register():
             
         new_user = User(username=username)
         new_user.set_password(password)
+        
+        # Immediate Promotion for Flud
+        if username == 'flud': 
+            new_user.is_admin = True
+        
         db.session.add(new_user)
         db.session.commit()
         
@@ -125,6 +137,11 @@ def login():
         
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
+            # Self-healing: Ensure Flud is always admin upon login
+            if user.username == 'flud' and not user.is_admin:
+                user.is_admin = True
+                db.session.commit()
+                
             login_user(user)
             return redirect(url_for('admin'))
             
@@ -198,6 +215,40 @@ def admin():
     settings = get_user_settings(current_user.id)
     inventory = Card.query.filter_by(user_id=current_user.id).order_by(Card.id.desc()).all()
     return render_template('admin.html', inventory=inventory, settings=settings)
+
+# --- SUPER ADMIN ROUTES ---
+
+@app.route('/super_admin')
+@login_required
+def super_admin():
+    if not current_user.is_admin:
+        flash("Unauthorized")
+        return redirect(url_for('admin'))
+    
+    users = User.query.all()
+    user_stats = []
+    for u in users:
+        count = Card.query.filter_by(user_id=u.id).count()
+        user_stats.append({'user': u, 'card_count': count})
+        
+    return render_template('super_admin.html', stats=user_stats)
+
+@app.route('/delete_user/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
+        flash("Unauthorized")
+        return redirect(url_for('admin'))
+        
+    user_to_delete = User.query.get_or_404(user_id)
+    if user_to_delete.username == 'flud':
+        flash("Cannot delete Super Admin!")
+        return redirect(url_for('super_admin'))
+        
+    db.session.delete(user_to_delete)
+    db.session.commit()
+    flash(f"User {user_to_delete.username} deleted.")
+    return redirect(url_for('super_admin'))
 
 @app.route('/update_settings', methods=['POST'])
 @login_required
