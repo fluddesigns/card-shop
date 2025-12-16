@@ -26,7 +26,7 @@
         
         body { 
             background-color: #f8f9fa; 
-            padding-top: 70px; 
+            padding-top: 56px; 
             margin: 0;
         }
         
@@ -40,11 +40,10 @@
             <!-- LEFT: Brand -->
             <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}" title="Home">
                 <div class="pokeball-logo"></div>
-                <!-- Hide "Home" text on mobile (d-none), show on medium+ screens (d-md-inline) -->
                 <span class="d-none d-md-inline ps-2">Home</span>
             </a>
 
-            <!-- CENTER: User Icon (Absolute Center for ALL screens) -->
+            <!-- CENTER: User Icon -->
             {% if current_user.is_authenticated %}
             <div class="position-absolute start-50 top-50 translate-middle" style="z-index: 1050;">
                 <a class="nav-link p-0" href="{{ url_for('profile') }}" title="My Profile">
@@ -55,7 +54,7 @@
             </div>
             {% endif %}
 
-            <!-- Toggler for Mobile (Hamburger) -->
+            <!-- Toggler -->
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -64,13 +63,13 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
                     {% if current_user.is_authenticated %}
-                        <!-- Desktop Dropdown -->
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 ☰ Menu
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdown">
                                 <li><a class="dropdown-item" href="{{ url_for('admin') }}">Inventory Admin</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('sales') }}">💰 Sales History</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('trade_tool') }}">Trade Calculator</a></li>
                                 
                                 {% if current_user.is_admin %}
@@ -86,7 +85,6 @@
                             </ul>
                         </li>
                     {% else %}
-                        <!-- LOGGED OUT -->
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('login') }}">Login</a>
                         </li>
