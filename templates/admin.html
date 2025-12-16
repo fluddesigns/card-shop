@@ -2,13 +2,19 @@
 {% block title %}Admin{% endblock %}
 {% block styles %}
 <style>
-    /* Card Styles for Admin Grid (Matches Public View Exactly) */
-    .binder-grid { 
-        display: grid !important; 
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; 
-        gap: 15px !important; 
-        margin-top: 15px; 
+    /* MATCHING PUBLIC INVENTORY CSS EXACTLY */
+    .view-toggle .btn-check:checked + .btn-outline-primary {
+        background-color: #1e3c72;
+        border-color: #1e3c72;
+        color: white;
     }
+
+    .binder-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
+        gap: 15px; 
+    }
+    
     .card-slot { 
         border: none; 
         border-radius: 10px; 
@@ -19,40 +25,22 @@
         transition: transform 0.2s; 
         cursor: pointer; 
         border: 2px solid transparent; 
-        /* FIXED: Removed width: 100% which causes vertical stacking */
-        max-width: 100%;
+        /* Reset width to ensure grid behavior */
+        width: auto; 
     }
+
     .card-slot:hover { 
         transform: translateY(-5px); 
         z-index: 10; 
         box-shadow: 0 8px 15px rgba(0,0,0,0.3); 
-        border-color: #0d6efd; 
+        outline: 2px solid #ffc107; /* Admin highlight */
     }
     
-    .card-image { 
-        width: 100%; 
-        height: 100%; 
-        object-fit: contain; 
-        position: relative; 
-        z-index: 1; 
-        transition: opacity 0.3s; 
-        opacity: 0; 
-    }
+    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; opacity: 0; }
     .card-image.loaded { opacity: 1; }
     
-    .skeleton-loader { 
-        width: 100%; 
-        height: 100%; 
-        background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); 
-        background-size: 200% 100%; 
-        animation: loading 1.5s infinite; 
-        position: absolute; 
-        top: 0; 
-        left: 0; 
-        z-index: 2; 
-    }
+    .skeleton-loader { width: 100%; height: 100%; background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); background-size: 200% 100%; animation: loading 1.5s infinite; position: absolute; top: 0; left: 0; z-index: 2; }
     .skeleton-loader.hidden { display: none; }
-    
     @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     
     .price-badge { position: absolute; top: 5px; right: 5px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
@@ -62,7 +50,6 @@
     /* Filter Bar */
     .filter-bar { background: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #dee2e6; }
     .filter-label { font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase; margin-bottom: 4px; }
-    .view-toggle .btn-check:checked + .btn-outline-primary { background-color: #0d6efd; color: white; }
 </style>
 {% endblock %}
 
@@ -127,7 +114,7 @@
                 <select id="filterFinish" class="form-select form-select-sm"><option value="">All Finishes</option></select>
             </div>
             <div class="col-6 col-md-3">
-                 <!-- Spacer or additional filters -->
+                 <!-- Spacer -->
             </div>
         </div>
     </div>
@@ -144,7 +131,8 @@
                             data-game="{{ c.game }}" 
                             data-name="{{ c.card_name }}" 
                             data-set="{{ c.set_name }}" 
-                            data-finish="{{ c.finish }}">
+                            data-finish="{{ c.finish }}" 
+                            data-condition="{{ c.condition }}">
                             <td>{{ c.card_name }} <small class="text-muted">{{ c.game }}</small></td>
                             <td>{{ c.set_name }}</td>
                             <form action="{{ url_for('update_card', id=c.id) }}" method="POST">
@@ -170,9 +158,10 @@
         <div class="card-slot card-item" 
              data-game="{{ c.game }}" 
              data-name="{{ c.card_name }}" 
-             data-set="{{ c.set_name }}"
+             data-set="{{ c.set_name }}" 
              data-image="{{ c.image_url }}"
              data-finish="{{ c.finish }}"
+             data-condition="{{ c.condition }}"
              onclick="openSaleModal('{{ c.id }}', '{{ c.card_name|replace("'", "") }}', '{{ c.quantity }}', {{ c.price }})">
             
             <div class="price-badge">${{ "%.2f"|format(c.price) }}</div>
@@ -218,7 +207,7 @@
     let currentUnitPrice = 0;
     
     $(document).ready(function(){ 
-        // Force the layout to put length selector at bottom using DOM option
+        // DOM: Filter top, Table middle, Pagination bottom
         table = $('#admTable').DataTable({
             responsive: true, 
             order: [[0,'desc']],
