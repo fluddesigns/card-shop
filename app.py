@@ -306,8 +306,7 @@ def upload_csv():
         try:
             df = pd.read_csv(file)
             
-            # Create a map of { 'lowercase_stripped_header': 'Original Header' }
-            # This ensures we find 'quantity' even if the CSV says 'Quantity ' or 'QUANTITY'
+            # Map lowercase headers to actual headers
             col_map = {c.lower().strip(): c for c in df.columns}
             
             def get_val(row, candidates, default=None):
@@ -321,27 +320,40 @@ def upload_csv():
             total_qty_imported = 0
             
             for _, row in df.iterrows():
-                # Extract Quantity with robust fallback logic
-                q_raw = get_val(row, ['quantity', 'qty', 'total quantity', 'add to quantity', 'count', 'amount'], 1)
+                # --- NEW ROBUST QUANTITY LOGIC ---
+                qty = 1 # Default
                 
-                # Handle cases like "4x" or string inputs
-                try:
-                    if isinstance(q_raw, str):
-                        q_clean = re.sub(r'[^\d]', '', q_raw) # Remove non-digits
-                        qty = int(q_clean) if q_clean else 1
-                    else:
-                        qty = int(q_raw)
-                except:
-                    qty = 1
+                # List of potential headers, prioritized. 
+                # We prioritize "Add to Quantity" for delta imports, then "Total", then generic.
+                qty_headers = ['add to quantity', 'total quantity', 'quantity', 'qty', 'count', 'amount']
+                
+                for h in qty_headers:
+                    if h in col_map:
+                        raw_val = row[col_map[h]]
+                        try:
+                            # Clean string inputs like "4x"
+                            if isinstance(raw_val, str):
+                                clean_val = re.sub(r'[^\d]', '', raw_val)
+                                parsed = int(clean_val) if clean_val else 0
+                            else:
+                                parsed = int(raw_val) if pd.notna(raw_val) else 0
+                            
+                            # If we found a valid positive number, use it and stop looking
+                            if parsed > 0:
+                                qty = parsed
+                                break
+                        except:
+                            continue
+                # ---------------------------------
 
-                # Extract other fields using the case-insensitive helper
+                # Extract other fields
                 game_val = get_val(row, ['game', 'product line', 'category'], 'TCGPlayer Import')
                 set_val = get_val(row, ['set', 'set name', 'expansion'], 'Unknown')
                 name_val = get_val(row, ['name', 'card name', 'product name', 'title'], 'Unknown')
                 num_val = str(get_val(row, ['number', 'card number', 'no.'], ''))
                 cond_val = get_val(row, ['condition', 'cond'], 'NM')
                 
-                # specific handling for price to avoid crashes on currency symbols
+                # Price parsing
                 p_raw = get_val(row, ['price', 'market price', 'tcg market price'], 0.0)
                 try:
                     price_val = float(str(p_raw).replace('$','').replace(',',''))
@@ -366,7 +378,6 @@ def upload_csv():
                     location=loc_val
                 ))
                 
-                # Add to total count
                 total_qty_imported += qty
                 
             db.session.commit()
