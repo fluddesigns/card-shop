@@ -18,14 +18,14 @@
         aspect-ratio: 2.5/3.5; 
         transition: transform 0.2s; 
         cursor: pointer; 
-        border: 2px solid transparent; 
-        width: 100%; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        /* Removed width: 100% to fix giant cards */
     }
     .card-slot:hover { 
         transform: translateY(-5px); 
         z-index: 10; 
         box-shadow: 0 8px 15px rgba(0,0,0,0.3); 
-        border-color: #0d6efd; 
+        outline: 2px solid #ffc107; 
     }
     
     .card-image { 
@@ -82,7 +82,7 @@
     {% if messages %}<div class="alert alert-warning p-2">{{ messages[0] }}</div>{% endif %}
     {% endwith %}
 
-    <!-- --- ORIGINAL LAYOUT RESTORED: 3 CARDS ROW --- -->
+    <!-- --- ORIGINAL LAYOUT: 3 CARDS ROW --- -->
     <div class="row g-3 mb-3">
         <!-- Settings -->
         <div class="col-md-3">
@@ -149,7 +149,7 @@
     </div>
     <!-- --- END ORIGINAL LAYOUT --- -->
 
-    <!-- NEW FILTER BAR (Inserted Below Layout) -->
+    <!-- FILTER BAR -->
     <div class="filter-bar shadow-sm">
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
@@ -172,10 +172,10 @@
                  <div class="d-flex justify-content-end align-items-end h-100">
                     <!-- View Toggle -->
                     <div class="btn-group view-toggle" role="group">
-                        <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onchange="toggleView('grid')">
-                        <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
-                        <input type="radio" class="btn-check" name="viewmode" id="v-list" onchange="toggleView('list')">
+                        <input type="radio" class="btn-check" name="viewmode" id="v-list" checked onchange="toggleView('list')">
                         <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
+                        <input type="radio" class="btn-check" name="viewmode" id="v-grid" onchange="toggleView('grid')">
+                        <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
                     </div>
                 </div>
             </div>
@@ -183,12 +183,12 @@
     </div>
 
     <!-- GRID VIEW (Default) -->
-    <div id="view-grid" class="binder-grid">
+    <div id="view-grid" class="binder-grid d-none">
         {% for c in inventory %}
         <div class="card-slot card-item" 
              data-game="{{ c.game }}" 
              data-name="{{ c.card_name }}" 
-             data-set="{{ c.set_name }}"
+             data-set="{{ c.set_name }}" 
              data-image="{{ c.image_url }}"
              data-finish="{{ c.finish }}"
              data-condition="{{ c.condition }}"
@@ -216,7 +216,7 @@
     </div>
 
     <!-- LIST VIEW -->
-    <div id="view-list" class="d-none">
+    <div id="view-list">
         <div class="card shadow-sm">
             <div class="card-body p-0">
                 <table id="admTable" class="table table-striped table-bordered dt-responsive nowrap w-100">
