@@ -54,6 +54,7 @@ class Card(db.Model):
     price = db.Column(db.Float, default=0.0)
     quantity = db.Column(db.Integer, default=1)
     finish = db.Column(db.String(50), default='Normal')
+    image_url = db.Column(db.String(500))
     variant = db.Column(db.String(100))
     location = db.Column(db.String(100))
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
@@ -211,6 +212,7 @@ def add_card():
             finish = request.form.get('finish'),
             price = float(request.form.get('price', 0.0)),
             quantity = int(request.form.get('quantity', 1)),
+            image_url = request.form.get('image_url', ''),
             variant = request.form.get('variant', ''),
             location = request.form.get('location', '')
         )
@@ -272,17 +274,18 @@ def upload_csv():
                 return default
             count = 0
             for _, row in df.iterrows():
-                game_val = get_val(row, ['Game', 'game', 'Category'], 'TCGPlayer Import')
+                game_val = get_val(row, ['Product Line', 'Game', 'game', 'Category'], 'TCGPlayer Import')
                 db.session.add(Card(
                     user_id=current_user.id,
                     game=game_val,
-                    set_name=get_val(row, ['Set', 'set', 'Set Name', 'Expansion'], 'Unknown'),
-                    card_name=get_val(row, ['Name', 'name', 'Product Name', 'Card Name'], 'Unknown'),
+                    set_name=get_val(row, ['Set Name', 'Set', 'set', 'Expansion'], 'Unknown'),
+                    card_name=get_val(row, ['Product Name', 'Name', 'name', 'Card Name', 'Title'], 'Unknown'),
                     card_number=str(get_val(row, ['Number', 'number', 'Card Number'], '')),
                     condition=get_val(row, ['Condition', 'cond'], 'NM'),
-                    price=float(get_val(row, ['Price', 'price', 'TCG Market Price', 'Market Price'], 0.0)),
-                    quantity=int(get_val(row, ['Quantity', 'qty', 'Total Quantity', 'Add to Quantity'], 1)),
-                    finish=get_val(row, ['Finish', 'foil', 'Printing'], 'Normal'),
+                    price=float(get_val(row, ['TCG Market Price', 'Price', 'price', 'Market Price'], 0.0)),
+                    quantity=int(get_val(row, ['Total Quantity', 'Quantity', 'qty', 'Add to Quantity'], 1)),
+                    finish=get_val(row, ['Rarity', 'Finish', 'foil', 'Printing'], 'Normal'),
+                    image_url=get_val(row, ['Photo URL', 'Image URL', 'image'], ''),
                     location=get_val(row, ['Location', 'binder'], '')
                 ))
                 count += 1
