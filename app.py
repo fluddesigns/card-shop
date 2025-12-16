@@ -305,29 +305,72 @@ def upload_csv():
     if file:
         try:
             df = pd.read_csv(file)
-            def get_val(row, keys, default=None):
-                for k in keys:
-                    if k in row: return row[k] if pd.notna(row[k]) else default
+            
+            # Create a map of { 'lowercase_stripped_header': 'Original Header' }
+            # This ensures we find 'quantity' even if the CSV says 'Quantity ' or 'QUANTITY'
+            col_map = {c.lower().strip(): c for c in df.columns}
+            
+            def get_val(row, candidates, default=None):
+                for cand in candidates:
+                    if cand in col_map:
+                        col_name = col_map[cand]
+                        val = row[col_name]
+                        return val if pd.notna(val) else default
                 return default
-            count = 0
+
+            total_qty_imported = 0
+            
             for _, row in df.iterrows():
-                game_val = get_val(row, ['Product Line', 'Game', 'game', 'Category'], 'TCGPlayer Import')
+                # Extract Quantity with robust fallback logic
+                q_raw = get_val(row, ['quantity', 'qty', 'total quantity', 'add to quantity', 'count', 'amount'], 1)
+                
+                # Handle cases like "4x" or string inputs
+                try:
+                    if isinstance(q_raw, str):
+                        q_clean = re.sub(r'[^\d]', '', q_raw) # Remove non-digits
+                        qty = int(q_clean) if q_clean else 1
+                    else:
+                        qty = int(q_raw)
+                except:
+                    qty = 1
+
+                # Extract other fields using the case-insensitive helper
+                game_val = get_val(row, ['game', 'product line', 'category'], 'TCGPlayer Import')
+                set_val = get_val(row, ['set', 'set name', 'expansion'], 'Unknown')
+                name_val = get_val(row, ['name', 'card name', 'product name', 'title'], 'Unknown')
+                num_val = str(get_val(row, ['number', 'card number', 'no.'], ''))
+                cond_val = get_val(row, ['condition', 'cond'], 'NM')
+                
+                # specific handling for price to avoid crashes on currency symbols
+                p_raw = get_val(row, ['price', 'market price', 'tcg market price'], 0.0)
+                try:
+                    price_val = float(str(p_raw).replace('$','').replace(',',''))
+                except:
+                    price_val = 0.0
+
+                finish_val = get_val(row, ['finish', 'rarity', 'printing', 'foil'], 'Normal')
+                img_val = get_val(row, ['image', 'image url', 'photo url'], '')
+                loc_val = get_val(row, ['location', 'binder'], '')
+
                 db.session.add(Card(
                     user_id=current_user.id,
                     game=game_val,
-                    set_name=get_val(row, ['Set Name', 'Set', 'set', 'Expansion'], 'Unknown'),
-                    card_name=get_val(row, ['Product Name', 'Name', 'name', 'Card Name', 'Title'], 'Unknown'),
-                    card_number=str(get_val(row, ['Number', 'number', 'Card Number'], '')),
-                    condition=get_val(row, ['Condition', 'cond'], 'NM'),
-                    price=float(get_val(row, ['TCG Market Price', 'Price', 'price', 'Market Price'], 0.0)),
-                    quantity=int(get_val(row, ['Total Quantity', 'Quantity', 'qty', 'Add to Quantity'], 1)),
-                    finish=get_val(row, ['Rarity', 'Finish', 'foil', 'Printing'], 'Normal'),
-                    image_url=get_val(row, ['Photo URL', 'Image URL', 'image'], ''),
-                    location=get_val(row, ['Location', 'binder'], '')
+                    set_name=set_val,
+                    card_name=name_val,
+                    card_number=num_val,
+                    condition=cond_val,
+                    price=price_val,
+                    quantity=qty,
+                    finish=finish_val,
+                    image_url=img_val,
+                    location=loc_val
                 ))
-                count += 1
+                
+                # Add to total count
+                total_qty_imported += qty
+                
             db.session.commit()
-            flash(f'Imported {count} cards')
+            flash(f'Imported {total_qty_imported} cards')
         except Exception as e:
             flash(f'Error: {e}')
     return redirect(url_for('admin'))
