@@ -4,9 +4,9 @@
 <style>
     /* Card Styles for Admin Grid (Matches Public View Exactly) */
     .binder-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
-        gap: 15px; 
+        display: grid !important; 
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; 
+        gap: 15px !important; 
         margin-top: 15px; 
     }
     .card-slot { 
@@ -19,7 +19,8 @@
         transition: transform 0.2s; 
         cursor: pointer; 
         border: 2px solid transparent; 
-        width: 100%; 
+        /* Removed width: 100% to prevent giant stacking */
+        max-width: 100%;
     }
     .card-slot:hover { 
         transform: translateY(-5px); 
@@ -198,6 +199,7 @@
     <div class="modal fade" id="importModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Import Tools</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" id="importTabs" role="tablist"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-paste">Paste Text</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-csv">Upload CSV</button></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="tab-paste"><form action="{{ url_for('paste_import') }}" method="POST"><select name="game_mode" class="form-select mb-2"><option value="magic">Magic</option><option value="pokemon">Pokemon</option></select><textarea name="paste_data" class="form-control mb-2" rows="5" placeholder="1x Sol Ring [CMM]"></textarea><button class="btn btn-secondary w-100">Import</button></form></div><div class="tab-pane fade" id="tab-csv"><form action="{{ url_for('upload_csv') }}" method="post" enctype="multipart/form-data"><input class="form-control mb-2" type="file" name="file" accept=".csv" required><button class="btn btn-secondary w-100">Upload</button></form></div></div></div></div></div></div>
     <!-- Config -->
     <div class="modal fade" id="configModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form action="{{ url_for('update_settings') }}" method="POST"><div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" name="show_prices" {% if settings.show_prices %}checked{% endif %}><label class="form-check-label">Show Public Prices</label></div><button class="btn btn-dark w-100">Save Changes</button></form></div></div></div></div>
+
 </div>
 {% endblock %}
 
@@ -316,6 +318,7 @@
             const game = (card.dataset.game || "").toLowerCase();
             const name = card.dataset.name;
             const set = (card.dataset.set || "").trim();
+            const loader = card.querySelector('.skeleton-loader');
 
             try {
                 if (game.includes('magic') || game.includes('mtg')) {
@@ -326,8 +329,8 @@
                     if(!r.ok) throw new Error("404");
                     const d = await r.json();
                     let target = d.data && d.data.length > 0 ? d.data[0] : d;
-                    if (target.image_uris) applySrc(imgEl, target.image_uris.normal);
-                    else if (target.card_faces) applySrc(imgEl, target.card_faces[0].image_uris.normal);
+                    if (target.image_uris) applySrc(imgEl, loader, target.image_uris.normal);
+                    else if (target.card_faces) applySrc(imgEl, loader, target.card_faces[0].image_uris.normal);
                     else throw new Error("No Img");
                 } 
                 else if (game.includes('pokemon') || game.includes('pkmn')) {
@@ -337,20 +340,18 @@
                     let r = await fetch(query);
                     let d = await r.json();
                     if (!d.data || d.data.length === 0) { r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`); d = await r.json(); }
-                    if (d.data && d.data.length > 0) applySrc(imgEl, d.data[0].images.small);
+                    if (d.data && d.data.length > 0) applySrc(imgEl, loader, d.data[0].images.small);
                     else throw new Error("No Img");
                 } 
-                else { loadFallback(imgEl, 'default'); }
-            } catch (error) { loadFallback(imgEl, game.includes('pokemon') ? 'pokemon' : 'default'); }
+                else { loadFallback(imgEl, loader, 'default'); }
+            } catch (error) { loadFallback(imgEl, loader, game.includes('pokemon') ? 'pokemon' : 'default'); }
         }
-        function applySrc(img, src) { img.src = src; }
-        function loadFallback(img, type) {
+        function applySrc(img, loader, src) { img.src = src; }
+        function loadFallback(img, loader, type) {
             let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
             if (type === 'pokemon') backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
             img.src = backSrc; img.style.opacity = "0.3"; 
-            img.classList.add('loaded'); // Hide loader via CSS
-            const loader = img.previousElementSibling;
-            if(loader) loader.classList.add('hidden');
+            if(loader) loader.classList.add('hidden'); img.classList.add('loaded');
         }
     });
 </script>
