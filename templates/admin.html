@@ -144,12 +144,12 @@
                         <div class="col-6 col-md-3">
                             <select id="filterGame" class="form-select form-select-sm">
                                 <option value="">All Games</option>
-                                </select>
+                            </select>
                         </div>
                         <div class="col-6 col-md-3">
                             <select id="filterSet" class="form-select form-select-sm">
                                 <option value="">All Sets</option>
-                                </select>
+                            </select>
                         </div>
                         <div class="col-6 col-md-2">
                             <select id="sortInventory" class="form-select form-select-sm">
@@ -225,17 +225,25 @@
 
     <div id="bulkActionBar" class="fixed-bottom bg-dark text-white p-3 shadow-lg d-none" style="z-index: 1050; border-top: 1px solid #444;">
         <div class="container d-flex justify-content-between align-items-center">
-            <div>
-                <span class="fw-bold me-2 badge bg-primary fs-6"><span id="selectedCount">0</span> Selected</span>
+            <div class="d-flex align-items-center">
+                <span class="fw-bold me-3 badge bg-primary fs-6"><span id="selectedCount">0</span> Selected</span>
                 <button type="button" class="btn btn-sm btn-outline-light" onclick="clearSelection()">Cancel</button>
             </div>
-            <div class="btn-group">
-                <button type="submit" form="bulkForm" name="action" value="delete" class="btn btn-danger" onclick="return confirm('WARNING: Are you sure you want to PERMANENTLY DELETE these items?')">
-                    🗑️ Delete Selected
-                </button>
-                <button type="submit" form="bulkForm" name="action" value="sell" class="btn btn-success" onclick="return confirm('Mark all selected items as SOLD at their listed price?')">
-                    💰 Sell Selected
-                </button>
+            
+            <div class="d-flex align-items-center">
+                <div class="input-group input-group-sm me-2" style="width: 130px;">
+                    <span class="input-group-text bg-secondary text-white border-0">Disc %</span>
+                    <input type="number" form="bulkForm" name="discount" class="form-control" placeholder="0" min="0" max="100">
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" form="bulkForm" name="action" value="delete" class="btn btn-danger" onclick="return confirm('WARNING: Are you sure you want to PERMANENTLY DELETE these items?')">
+                        🗑️ Delete
+                    </button>
+                    <button type="submit" form="bulkForm" name="action" value="sell" class="btn btn-success" onclick="return confirm('Mark all selected items as SOLD?')">
+                        💰 Sell
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -288,14 +296,19 @@
                     <form action="{{ url_for('update_card', id=card.id) }}" method="POST">
                         <h6 class="border-bottom pb-2 text-success">Record Sale</h6>
                         <input type="hidden" name="action" value="sold_custom">
+                        
                         <div class="row g-2 mb-2">
                             <div class="col-6">
                                 <label class="small">Qty Sold</label>
                                 <input type="number" name="sold_quantity" class="form-control form-control-sm" value="1" max="{{ card.quantity }}">
                             </div>
                             <div class="col-6">
-                                <label class="small">Total Sale $</label>
-                                <input type="number" step="0.01" name="sale_total" class="form-control form-control-sm" placeholder="Auto-calc">
+                                <label class="small">Discount %</label>
+                                <input type="number" name="discount" class="form-control form-control-sm" placeholder="e.g. 10">
+                            </div>
+                            <div class="col-12">
+                                <label class="small">Total Sale $ (Optional Override)</label>
+                                <input type="number" step="0.01" name="sale_total" class="form-control form-control-sm" placeholder="Leave empty to calc automatically">
                             </div>
                         </div>
                         <div class="d-grid">
@@ -367,7 +380,7 @@
             let visible = 0;
 
             rows.forEach(row => {
-                const rName = row.dataset.name; // Already lowercased in HTML
+                const rName = row.dataset.name; 
                 const rGame = row.dataset.game;
                 const rSet = row.dataset.set;
 
@@ -387,7 +400,7 @@
             });
 
             visibleCountSpan.innerText = visible;
-            updateBulkUI(); // Update bulk bar count
+            updateBulkUI(); 
         }
 
         function applySort() {
@@ -404,7 +417,7 @@
                     case 'price-desc': return priceB - priceA;
                     case 'price-asc': return priceA - priceB;
                     case 'name-asc': return nameA.localeCompare(nameB);
-                    case 'newest': return idB - idA; // Assuming higher ID = newer
+                    case 'newest': return idB - idA;
                     default: return 0;
                 }
             });
@@ -420,7 +433,7 @@
         sortSelect.addEventListener('change', applySort);
 
 
-        // --- BULK ACTIONS (Fixed) ---
+        // --- BULK ACTIONS ---
         const selectAll = document.getElementById('selectAll');
         const checkboxes = document.querySelectorAll('.card-checkbox');
         const actionBar = document.getElementById('bulkActionBar');
@@ -440,12 +453,10 @@
             }
         };
 
-        // Master Checkbox
         if(selectAll) {
             selectAll.addEventListener('change', function() {
                 const isChecked = selectAll.checked;
                 rows.forEach(row => {
-                    // Only check visible rows
                     if (row.style.display !== 'none') {
                         const cb = row.querySelector('.card-checkbox');
                         if(cb) cb.checked = isChecked;
@@ -455,7 +466,6 @@
             });
         }
 
-        // Individual Checkboxes
         checkboxes.forEach(cb => {
             cb.addEventListener('change', function() {
                 updateBulkUI();

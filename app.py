@@ -72,7 +72,7 @@ class Sale(db.Model):
 
 with app.app_context():
     db.create_all()
-    # Auto-promote 'flud' logic on startup
+    # Auto-promote 'flud' logic on startup if needed
     admin_user = User.query.filter_by(username='flud').first()
     if admin_user and not admin_user.is_admin:
         admin_user.is_admin = True
@@ -92,18 +92,15 @@ def get_user_settings(user_id):
 
 @app.route('/')
 def index():
-    # Landing page listing all active traders
     users = User.query.all()
     return render_template('landing.html', users=users)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    # LOCKED DOWN: Registration disabled per user request
     if request.method == 'POST':
         flash("Registration is currently disabled.")
         return redirect(url_for('login'))
     
-    # If they try to visit the page manually
     flash("Registration is currently disabled.")
     return redirect(url_for('login'))
 
@@ -245,8 +242,8 @@ def add_card():
             card_name = request.form.get('card_name'),
             set_name = request.form.get('set_name'),
             card_number = request.form.get('card_number'),
-            condition = request.form.get('condition'),
-            finish = request.form.get('finish'),
+            condition = request.form.get('condition', 'NM'),
+            finish = request.form.get('finish', 'Normal'),
             price = float(request.form.get('price', 0.0)),
             quantity = int(request.form.get('quantity', 1)),
             image_url = request.form.get('image_url', ''),
@@ -305,55 +302,40 @@ def upload_csv():
     if file:
         try:
             df = pd.read_csv(file)
-            
-            # Map lowercase headers to actual headers
             col_map = {c.lower().strip(): c for c in df.columns}
             
             def get_val(row, candidates, default=None):
                 for cand in candidates:
                     if cand in col_map:
-                        col_name = col_map[cand]
-                        val = row[col_name]
+                        val = row[col_map[cand]]
                         return val if pd.notna(val) else default
                 return default
 
             total_qty_imported = 0
             
             for _, row in df.iterrows():
-                # --- NEW ROBUST QUANTITY LOGIC ---
-                qty = 1 # Default
-                
-                # List of potential headers, prioritized. 
-                # We prioritize "Add to Quantity" for delta imports, then "Total", then generic.
+                qty = 1
                 qty_headers = ['add to quantity', 'total quantity', 'quantity', 'qty', 'count', 'amount']
-                
                 for h in qty_headers:
                     if h in col_map:
                         raw_val = row[col_map[h]]
                         try:
-                            # Clean string inputs like "4x"
                             if isinstance(raw_val, str):
                                 clean_val = re.sub(r'[^\d]', '', raw_val)
                                 parsed = int(clean_val) if clean_val else 0
                             else:
                                 parsed = int(raw_val) if pd.notna(raw_val) else 0
-                            
-                            # If we found a valid positive number, use it and stop looking
                             if parsed > 0:
                                 qty = parsed
                                 break
-                        except:
-                            continue
-                # ---------------------------------
+                        except: continue
 
-                # Extract other fields
                 game_val = get_val(row, ['game', 'product line', 'category'], 'TCGPlayer Import')
                 set_val = get_val(row, ['set', 'set name', 'expansion'], 'Unknown')
                 name_val = get_val(row, ['name', 'card name', 'product name', 'title'], 'Unknown')
                 num_val = str(get_val(row, ['number', 'card number', 'no.'], ''))
                 cond_val = get_val(row, ['condition', 'cond'], 'NM')
                 
-                # Price parsing
                 p_raw = get_val(row, ['price', 'market price', 'tcg market price'], 0.0)
                 try:
                     price_val = float(str(p_raw).replace('$','').replace(',',''))
@@ -377,7 +359,6 @@ def upload_csv():
                     image_url=img_val,
                     location=loc_val
                 ))
-                
                 total_qty_imported += qty
                 
             db.session.commit()
@@ -386,6 +367,66 @@ def upload_csv():
             flash(f'Error: {e}')
     return redirect(url_for('admin'))
 
+# --- NEW: Bulk Actions with Discount Logic ---
+@app.route('/bulk_actions', methods=['POST'])
+@login_required
+def bulk_actions():
+    card_ids = request.form.getlist('card_ids')
+    action = request.form.get('action')
+    
+    # Logic: Calculate discount multiplier (e.g., 10% discount -> 0.9 multiplier)
+    try:
+        discount_raw = request.form.get('discount', '0')
+        discount_pct = float(discount_raw) if discount_raw.strip() != '' else 0.0
+    except ValueError:
+        discount_pct = 0.0
+        
+    multiplier = (100 - discount_pct) / 100
+
+    if not card_ids:
+        flash("No cards selected.")
+        return redirect(url_for('admin'))
+
+    count = 0
+    try:
+        for c_id in card_ids:
+            card = Card.query.get(int(c_id))
+            if card and card.user_id == current_user.id:
+                if action == 'delete':
+                    db.session.delete(card)
+                    count += 1
+                elif action == 'sell':
+                    # Calculate price with discount
+                    base_price = card.price * card.quantity
+                    final_price = base_price * multiplier
+                    
+                    sale = Sale(
+                        user_id=current_user.id,
+                        card_name=card.card_name,
+                        set_name=card.set_name,
+                        sale_price=final_price,
+                        quantity=card.quantity
+                    )
+                    db.session.add(sale)
+                    db.session.delete(card)
+                    count += 1
+
+        db.session.commit()
+        
+        if action == 'delete':
+            flash(f"Deleted {count} cards.")
+        elif action == 'sell':
+            msg = f"Sold {count} lots."
+            if discount_pct > 0: msg += f" Applied {discount_pct}% discount."
+            flash(msg)
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error: {str(e)}")
+
+    return redirect(url_for('admin'))
+
+# --- NEW: Update Card with Discount Logic ---
 @app.route('/update_card/<int:id>', methods=['POST'])
 @login_required
 def update_card(id):
@@ -401,19 +442,21 @@ def update_card(id):
             qty_sold = int(request.form.get('sold_quantity', 1))
             total_price_input = request.form.get('sale_total')
             
-            if total_price_input:
+            # Logic: Discount Calculation
+            discount_raw = request.form.get('discount', '0')
+            discount_pct = float(discount_raw) if discount_raw.strip() != '' else 0.0
+            multiplier = (100 - discount_pct) / 100
+            
+            if total_price_input and total_price_input.strip() != '':
                 final_sale_price = float(total_price_input)
             else:
-                final_sale_price = card.price * qty_sold
+                final_sale_price = (card.price * qty_sold) * multiplier
 
             if card.quantity >= qty_sold:
                 card.quantity -= qty_sold
-                
-                # Check if empty immediately after subtracting
                 if card.quantity == 0:
                     db.session.delete(card)
 
-                # Create Sale Record
                 sale = Sale(
                     user_id=current_user.id,
                     card_name=card.card_name,
@@ -422,7 +465,10 @@ def update_card(id):
                     quantity=qty_sold
                 )
                 db.session.add(sale)
-                flash(f"Sold {qty_sold}x {card.card_name} for ${final_sale_price:.2f}")
+                
+                msg = f"Sold {qty_sold}x {card.card_name} for ${final_sale_price:.2f}"
+                if discount_pct > 0: msg += f" ({discount_pct}% off)"
+                flash(msg)
             else:
                 flash("Not enough quantity.")
         except ValueError:
@@ -434,74 +480,16 @@ def update_card(id):
     elif action == 'update_details':
         try:
             card.price = float(request.form.get('price'))
-            
-            # Check for manual 0 quantity entry
             new_qty = int(request.form.get('quantity'))
             if new_qty <= 0:
                 db.session.delete(card)
             else:
                 card.quantity = new_qty
-            
             card.condition = request.form.get('condition')
             card.location = request.form.get('location')
         except: flash("Invalid input")
         
     db.session.commit()
-    return redirect(url_for('admin'))
-
-
-@app.route('/bulk_actions', methods=['POST'])
-@login_required
-def bulk_actions():
-    # 1. Get the list of checked IDs (returns a list of strings like ['1', '5', '9'])
-    card_ids = request.form.getlist('card_ids')
-    action = request.form.get('action')
-    
-    if not card_ids:
-        flash("No cards selected.")
-        return redirect(url_for('admin'))
-
-    count = 0
-    
-    try:
-        # 2. Iterate through every selected card
-        for c_id in card_ids:
-            card = Card.query.get(int(c_id))
-            
-            # Security Check: Ensure card exists AND belongs to you
-            if card and card.user_id == current_user.id:
-                
-                if action == 'delete':
-                    db.session.delete(card)
-                    count += 1
-                    
-                elif action == 'sell':
-                    # Create the Sale record
-                    total_price = card.price * card.quantity
-                    sale = Sale(
-                        user_id=current_user.id,
-                        card_name=card.card_name,
-                        set_name=card.set_name,
-                        sale_price=total_price,
-                        quantity=card.quantity
-                    )
-                    db.session.add(sale)
-                    
-                    # Remove from inventory
-                    db.session.delete(card) 
-                    count += 1
-
-        db.session.commit()
-        
-        if action == 'delete':
-            flash(f"Deleted {count} cards.")
-        elif action == 'sell':
-            flash(f"Sold {count} lots successfully.")
-            
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Error: {str(e)}")
-
     return redirect(url_for('admin'))
 
 if __name__ == '__main__':
