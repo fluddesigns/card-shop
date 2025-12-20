@@ -1,392 +1,357 @@
 ﻿{% extends "base.html" %}
-{% block title %}Admin{% endblock %}
-{% block styles %}
-<style>
-    /* MATCHING PUBLIC INVENTORY CSS EXACTLY */
-    .view-toggle .btn-check:checked + .btn-outline-primary {
-        background-color: #1e3c72;
-        border-color: #1e3c72;
-        color: white;
-    }
 
-    .binder-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
-        gap: 15px; 
-    }
-    
-    .card-slot { 
-        border: none; 
-        border-radius: 10px; 
-        overflow: hidden; 
-        background: #2c3e50; 
-        position: relative; 
-        aspect-ratio: 2.5/3.5; 
-        transition: transform 0.2s; 
-        cursor: pointer; 
-        border: 2px solid transparent; 
-        /* Reset width to ensure grid behavior */
-        width: auto; 
-    }
-
-    .card-slot:hover { 
-        transform: translateY(-5px); 
-        z-index: 10; 
-        box-shadow: 0 8px 15px rgba(0,0,0,0.3); 
-        outline: 2px solid #ffc107; /* Admin highlight */
-    }
-    
-    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; opacity: 0; }
-    .card-image.loaded { opacity: 1; }
-    
-    .skeleton-loader { width: 100%; height: 100%; background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); background-size: 200% 100%; animation: loading 1.5s infinite; position: absolute; top: 0; left: 0; z-index: 2; }
-    .skeleton-loader.hidden { display: none; }
-    @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    
-    .price-badge { position: absolute; top: 5px; right: 5px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-    .qty-badge { position: absolute; top: 5px; left: 5px; background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-    .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; }
-    
-    /* Filter Bar */
-    .filter-bar { background: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #dee2e6; }
-    .filter-label { font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase; margin-bottom: 4px; }
-</style>
-{% endblock %}
+{% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
-<!-- Define Handlers Early -->
-<script>
-    function imageLoaded(id) {
-        const loader = document.getElementById('loader-' + id);
-        const img = document.getElementById('img-' + id);
-        if (loader) loader.classList.add('hidden');
-        if (img) img.classList.add('loaded');
-    }
-    function imageFailed(img, id) { img.classList.add('needs-fetch'); }
-</script>
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="fw-bold">Inventory Management</h1>
+        <div>
+            <a href="{{ url_for('sales') }}" class="btn btn-outline-success me-2">💰 Sales History</a>
+            <a href="{{ url_for('profile') }}" class="btn btn-outline-primary">👤 Public Profile</a>
+        </div>
+    </div>
 
-<div class="container-fluid mt-3">
     {% with messages = get_flashed_messages() %}
-    {% if messages %}<div class="alert alert-warning p-2">{{ messages[0] }}</div>{% endif %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
     {% endwith %}
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="mb-0">Inventory Manager</h4>
+    <div class="accordion shadow-sm mb-4" id="adminTools">
         
-        <!-- View Toggle -->
-        <div class="btn-group view-toggle" role="group">
-            <input type="radio" class="btn-check" name="viewmode" id="v-list" checked onchange="toggleView('list')">
-            <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
-            <input type="radio" class="btn-check" name="viewmode" id="v-grid" onchange="toggleView('grid')">
-            <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdd">
+                    ➕ Manually Add Card
+                </button>
+            </h2>
+            <div id="collapseAdd" class="accordion-collapse collapse" data-bs-parent="#adminTools">
+                <div class="accordion-body">
+                    <form action="{{ url_for('add_card') }}" method="POST" class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Card Name</label>
+                            <input type="text" name="card_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Set Code/Name</label>
+                            <input type="text" name="set_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Game</label>
+                            <select name="game" class="form-select">
+                                <option value="Magic: The Gathering">Magic</option>
+                                <option value="Pokemon TCG">Pokemon</option>
+                                <option value="One Piece">One Piece</option>
+                                <option value="Lorcana">Lorcana</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Price ($)</label>
+                            <input type="number" step="0.01" name="price" class="form-control">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Quantity</label>
+                            <input type="number" name="quantity" value="1" class="form-control">
+                        </div>
+                        <div class="col-12 text-end">
+                            <button type="submit" class="btn btn-primary">Add Card</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePaste">
+                    📋 Paste Import (TCGPlayer/Arena)
+                </button>
+            </h2>
+            <div id="collapsePaste" class="accordion-collapse collapse" data-bs-parent="#adminTools">
+                <div class="accordion-body">
+                    <form action="{{ url_for('paste_import') }}" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">Paste List (Format: <code>Qty Name [SET] #Num</code>)</label>
+                            <textarea name="paste_data" class="form-control" rows="5"></textarea>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <select name="game_mode" class="form-select w-auto">
+                                <option value="magic">Magic: The Gathering</option>
+                                <option value="pokemon">Pokemon TCG</option>
+                            </select>
+                            <button type="submit" class="btn btn-success">Import List</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCSV">
+                    📂 Upload CSV (DragonShield/ManaBox)
+                </button>
+            </h2>
+            <div id="collapseCSV" class="accordion-collapse collapse" data-bs-parent="#adminTools">
+                <div class="accordion-body">
+                    <form action="{{ url_for('upload_csv') }}" method="POST" enctype="multipart/form-data">
+                        <div class="input-group">
+                            <input type="file" name="file" class="form-control" required>
+                            <button class="btn btn-dark" type="submit">Upload CSV</button>
+                        </div>
+                        <small class="text-muted">Supported columns: Name, Set, Quantity, Price, Condition, Finish.</small>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSettings">
+                    ⚙️ Store Settings
+                </button>
+            </h2>
+            <div id="collapseSettings" class="accordion-collapse collapse" data-bs-parent="#adminTools">
+                <div class="accordion-body">
+                    <form action="{{ url_for('update_settings') }}" method="POST">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="show_prices" id="showPrices" {% if settings.show_prices %}checked{% endif %}>
+                            <label class="form-check-label" for="showPrices">Show Prices to Public</label>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary mt-2">Save Settings</button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Controls Row -->
-    <div class="row g-3 mb-3">
-        <div class="col-md-3">
-            <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search inventory...">
-        </div>
-        <div class="col-md-9 text-end">
-            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#quickAddModal">+ Add Single</button>
-            <button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#importModal">Import CSV/Text</button>
-            <button class="btn btn-sm btn-dark" data-bs-toggle="modal" data-bs-target="#configModal">Config</button>
-        </div>
-    </div>
-
-    <!-- FILTER BAR -->
-    <div class="filter-bar shadow-sm">
-        <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="filter-label">Search</label>
-                <input type="text" id="searchInputFilter" class="form-control form-control-sm" placeholder="Filter current view...">
+    <form method="POST" action="{{ url_for('bulk_actions') }}" id="bulkForm">
+        
+        <div class="card shadow-sm mb-5">
+            <div class="card-header bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">Current Inventory ({{ inventory|length }})</h5>
+                    <input type="text" id="adminSearch" class="form-control form-control-sm w-auto" placeholder="Search...">
+                </div>
             </div>
-            <div class="col-6 col-md-2">
-                <label class="filter-label">Game</label>
-                <select id="filterGame" class="form-select form-select-sm"><option value="">All Games</option></select>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="filter-label">Set</label>
-                <select id="filterSet" class="form-select form-select-sm"><option value="">All Sets</option></select>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="filter-label">Finish</label>
-                <select id="filterFinish" class="form-select form-select-sm"><option value="">All Finishes</option></select>
-            </div>
-            <div class="col-6 col-md-3">
-                 <!-- Spacer -->
-            </div>
-        </div>
-    </div>
-
-    <!-- LIST VIEW -->
-    <div id="view-list">
-        <div class="card shadow-sm">
+            
             <div class="card-body p-0">
-                <table id="admTable" class="table table-striped table-bordered dt-responsive nowrap w-100">
-                    <thead><tr><th>Name</th><th>Set</th><th>$$</th><th>Qty</th><th>Act</th></tr></thead>
-                    <tbody>
-                        {% for c in inventory %}
-                        <tr class="list-item" 
-                            data-game="{{ c.game }}" 
-                            data-name="{{ c.card_name }}" 
-                            data-set="{{ c.set_name }}" 
-                            data-finish="{{ c.finish }}" 
-                            data-condition="{{ c.condition }}">
-                            <td>{{ c.card_name }} <small class="text-muted">{{ c.game }}</small></td>
-                            <td>{{ c.set_name }}</td>
-                            <form action="{{ url_for('update_card', id=c.id) }}" method="POST">
-                            <td><input type="number" step="0.01" name="price" value="{{ c.price }}" class="form-control form-control-sm" style="width:70px"></td>
-                            <td><input type="number" name="quantity" value="{{ c.quantity }}" class="form-control form-control-sm" style="width:50px"></td>
-                            <td>
-                                <button type="button" class="btn btn-warning btn-sm p-0 px-1" onclick="openSaleModal('{{ c.id }}', '{{ c.card_name|replace("'", "") }}', '{{ c.quantity }}', {{ c.price }})">Sold</button>
-                                <button type="submit" name="action" value="update_details" class="btn btn-success btn-sm p-0 px-1" title="Save">Save</button>
-                                <button type="submit" name="action" value="delete" class="btn btn-danger btn-sm p-0 px-1" onclick="return confirm('Delete?')" title="Delete">Del</button>
-                            </td>
-                            </form>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0 align-middle" id="adminTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40px;" class="text-center">
+                                    <input type="checkbox" class="form-check-input" id="selectAll">
+                                </th>
+                                <th>Card Name</th>
+                                <th>Set</th>
+                                <th>Game</th>
+                                <th>Cond</th>
+                                <th>Price</th>
+                                <th>Qty</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for card in inventory %}
+                            <tr>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input card-checkbox" name="card_ids" value="{{ card.id }}">
+                                </td>
+                                
+                                <td class="fw-bold text-truncate" style="max-width: 250px;">
+                                    {{ card.card_name }}
+                                    {% if card.finish != 'Normal' %}
+                                        <span class="badge bg-info text-dark rounded-pill" style="font-size: 0.6em;">{{ card.finish }}</span>
+                                    {% endif %}
+                                    {% if card.variant %}
+                                        <span class="badge bg-secondary rounded-pill" style="font-size: 0.6em;">{{ card.variant }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><small class="text-muted">{{ card.set_name }}</small></td>
+                                <td><small class="text-muted">{{ card.game }}</small></td>
+                                <td><span class="badge bg-light text-dark border">{{ card.condition }}</span></td>
+                                <td class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
+                                <td>{{ card.quantity }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal{{ card.id }}">
+                                        ✏️ Edit
+                                    </button>
+                                </td>
+                            </tr>
+
+                            <div class="modal fade" id="editModal{{ card.id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Edit: {{ card.card_name }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <form action="{{ url_for('update_card', id=card.id) }}" method="POST">
+                                                
+                                                <h6 class="border-bottom pb-2">Update Details</h6>
+                                                <input type="hidden" name="action" value="update_details">
+                                                
+                                                <div class="row g-2 mb-3">
+                                                    <div class="col-6">
+                                                        <label class="form-label small">Price</label>
+                                                        <div class="input-group input-group-sm">
+                                                            <span class="input-group-text">$</span>
+                                                            <input type="number" step="0.01" name="price" class="form-control" value="{{ card.price }}">
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label small">Quantity</label>
+                                                        <input type="number" name="quantity" class="form-control form-control-sm" value="{{ card.quantity }}">
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label small">Condition</label>
+                                                        <select name="condition" class="form-select form-select-sm">
+                                                            <option value="NM" {% if card.condition == 'NM' %}selected{% endif %}>Near Mint</option>
+                                                            <option value="LP" {% if card.condition == 'LP' %}selected{% endif %}>Light Play</option>
+                                                            <option value="MP" {% if card.condition == 'MP' %}selected{% endif %}>Mod Play</option>
+                                                            <option value="HP" {% if card.condition == 'HP' %}selected{% endif %}>Heavy Play</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label small">Location/Binder</label>
+                                                        <input type="text" name="location" class="form-control form-control-sm" value="{{ card.location }}">
+                                                    </div>
+                                                </div>
+                                                <div class="d-grid mb-3">
+                                                    <button type="submit" class="btn btn-primary btn-sm">💾 Save Changes</button>
+                                                </div>
+                                            </form>
+
+                                            <hr>
+
+                                            <form action="{{ url_for('update_card', id=card.id) }}" method="POST">
+                                                <h6 class="border-bottom pb-2 text-success">Record Sale</h6>
+                                                <input type="hidden" name="action" value="sold_custom">
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-6">
+                                                        <label class="small">Qty Sold</label>
+                                                        <input type="number" name="sold_quantity" class="form-control form-control-sm" value="1" max="{{ card.quantity }}">
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="small">Total Sale $</label>
+                                                        <input type="number" step="0.01" name="sale_total" class="form-control form-control-sm" placeholder="Auto-calc if empty">
+                                                    </div>
+                                                </div>
+                                                <div class="d-grid">
+                                                    <button type="submit" class="btn btn-success btn-sm">💰 Mark Sold</button>
+                                                </div>
+                                            </form>
+
+                                            <hr>
+
+                                            <form action="{{ url_for('update_card', id=card.id) }}" method="POST" onsubmit="return confirm('Really delete this card?')">
+                                                <input type="hidden" name="action" value="delete">
+                                                <div class="d-grid">
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm">🗑️ Delete Permanently</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- GRID VIEW -->
-    <div id="view-grid" class="binder-grid d-none">
-        {% for c in inventory %}
-        <div class="card-slot card-item" 
-             data-game="{{ c.game }}" 
-             data-name="{{ c.card_name }}" 
-             data-set="{{ c.set_name }}" 
-             data-image="{{ c.image_url }}"
-             data-finish="{{ c.finish }}"
-             data-condition="{{ c.condition }}"
-             onclick="openSaleModal('{{ c.id }}', '{{ c.card_name|replace("'", "") }}', '{{ c.quantity }}', {{ c.price }})">
-            
-            <div class="price-badge">${{ "%.2f"|format(c.price) }}</div>
-            <div class="qty-badge">x{{ c.quantity }}</div>
-
-            <div class="skeleton-loader" id="loader-{{ c.id }}"></div>
-            
-            <img class="card-image {% if not c.image_url %}needs-fetch{% endif %}" 
-                 id="img-{{ c.id }}"
-                 src="{{ c.image_url if c.image_url else 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }}" 
-                 alt="{{ c.card_name }}" 
-                 loading="lazy"
-                 onload="imageLoaded('{{ c.id }}')"
-                 onerror="imageFailed(this, '{{ c.id }}')">
-            
-            <div class="info-overlay">
-                <div class="text-truncate fw-bold">{{ c.card_name }}</div>
-                <div class="opacity-75">{{ c.set_name }}</div>
+        <div id="bulkActionBar" class="fixed-bottom bg-dark text-white p-3 shadow-lg d-none" style="z-index: 1050; border-top: 1px solid #444;">
+            <div class="container d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="fw-bold me-2 badge bg-primary fs-6"><span id="selectedCount">0</span> Selected</span>
+                    <button type="button" class="btn btn-sm btn-outline-light" onclick="clearSelection()">Cancel</button>
+                </div>
+                <div class="btn-group">
+                    <button type="submit" name="action" value="delete" class="btn btn-danger" onclick="return confirm('WARNING: Are you sure you want to PERMANENTLY DELETE these items?')">
+                        🗑️ Delete Selected
+                    </button>
+                    <button type="submit" name="action" value="sell" class="btn btn-success" onclick="return confirm('Mark all selected items as SOLD at their listed price?')">
+                        💰 Sell Selected
+                    </button>
+                </div>
             </div>
         </div>
-        {% endfor %}
-    </div>
 
-    <!-- MODALS (Sale, Quick Add, Import, Config) -->
-    <!-- Sale Modal -->
-    <div class="modal fade" id="saleModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-warning"><h5 class="modal-title">Record Sale</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="saleForm" method="POST"><div class="modal-body"><p class="lead">Selling: <strong id="saleCardName"></strong></p><input type="hidden" name="action" value="sold_custom"><div class="row"><div class="col-6"><label class="form-label">Quantity</label><select name="sold_quantity" id="saleQtySelect" class="form-select"></select></div><div class="col-6"><label class="form-label">Total Price ($)</label><input type="number" step="0.01" name="sale_total" id="saleTotalInput" class="form-control"></div></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Confirm Sale</button></div></form></div></div></div>
-    <!-- Quick Add -->
-    <div class="modal fade" id="quickAddModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-primary text-white"><h5 class="modal-title">Quick Add</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><form action="{{ url_for('add_card') }}" method="POST"><div class="mb-2"><select name="game" class="form-select mb-2"><option>Magic: The Gathering</option><option>Pokemon TCG</option></select><input type="text" name="card_name" class="form-control mb-2" placeholder="Card Name" required><input type="text" name="set_name" class="form-control mb-2" placeholder="Set Name" required><div class="row g-2"><div class="col-6"><input type="number" name="price" class="form-control" placeholder="$0.00" step="0.01"></div><div class="col-6"><input type="number" name="quantity" class="form-control" value="1"></div></div></div><button class="btn btn-primary w-100">Add Card</button></form></div></div></div></div>
-    <!-- Import -->
-    <div class="modal fade" id="importModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Import Tools</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" id="importTabs" role="tablist"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-paste">Paste Text</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-csv">Upload CSV</button></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="tab-paste"><form action="{{ url_for('paste_import') }}" method="POST"><select name="game_mode" class="form-select mb-2"><option value="magic">Magic</option><option value="pokemon">Pokemon</option></select><textarea name="paste_data" class="form-control mb-2" rows="5" placeholder="1x Sol Ring [CMM]"></textarea><button class="btn btn-secondary w-100">Import</button></form></div><div class="tab-pane fade" id="tab-csv"><form action="{{ url_for('upload_csv') }}" method="post" enctype="multipart/form-data"><input class="form-control mb-2" type="file" name="file" accept=".csv" required><button class="btn btn-secondary w-100">Upload</button></form></div></div></div></div></div></div>
-    <!-- Config -->
-    <div class="modal fade" id="configModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><form action="{{ url_for('update_settings') }}" method="POST"><div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" name="show_prices" {% if settings.show_prices %}checked{% endif %}><label class="form-check-label">Show Public Prices</label></div><button class="btn btn-dark w-100">Save Changes</button></form></div></div></div></div>
-
+    </form>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script>
-    let table;
-    let currentUnitPrice = 0;
-    
-    $(document).ready(function(){ 
-        // DOM: Filter top, Table middle, Pagination bottom
-        table = $('#admTable').DataTable({
-            responsive: true, 
-            order: [[0,'desc']],
-            lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
-            pageLength: 20,
-            dom: 'rt<"d-flex justify-content-between align-items-center p-2 mt-2 border-top"lip>' 
-        }); 
-
-        // 1. POPULATE DROPDOWNS
-        const games = new Set();
-        const sets = new Set();
-        const finishes = new Set();
-        
-        $('.card-item').each(function() {
-            games.add($(this).data('game'));
-            sets.add($(this).data('set'));
-            finishes.add($(this).data('finish'));
+    // --- SEARCH FUNCTION ---
+    document.getElementById('adminSearch').addEventListener('keyup', function() {
+        let val = this.value.toLowerCase();
+        let rows = document.querySelectorAll('#adminTable tbody tr');
+        rows.forEach(row => {
+            let text = row.innerText.toLowerCase();
+            row.style.display = text.includes(val) ? '' : 'none';
         });
+    });
 
-        populateSelect('#filterGame', games);
-        populateSelect('#filterSet', sets);
-        populateSelect('#filterFinish', finishes);
+    // --- BULK SELECTION LOGIC ---
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.card-checkbox');
+        const actionBar = document.getElementById('bulkActionBar');
+        const countSpan = document.getElementById('selectedCount');
 
-        function populateSelect(selector, set) {
-            Array.from(set).filter(Boolean).sort().forEach(val => {
-                $(selector).append(new Option(val, val));
+        function updateUI() {
+            // Only count visible checked boxes (in case search is filtering some out)
+            const checked = Array.from(checkboxes).filter(cb => cb.checked);
+            const count = checked.length;
+            
+            countSpan.innerText = count;
+            
+            if (count > 0) {
+                actionBar.classList.remove('d-none');
+                // Ensure padding so the bar doesn't cover the last row
+                document.body.style.paddingBottom = "80px";
+            } else {
+                actionBar.classList.add('d-none');
+                document.body.style.paddingBottom = "0";
+            }
+        }
+
+        if(selectAll) {
+            selectAll.addEventListener('change', function() {
+                const isChecked = selectAll.checked;
+                // Only select visible rows if a search is active
+                checkboxes.forEach(cb => {
+                    if (cb.closest('tr').style.display !== 'none') {
+                        cb.checked = isChecked;
+                    }
+                });
+                updateUI();
             });
         }
 
-        // 2. LIVE FILTERING
-        $('#searchInput, #searchInputFilter, #filterGame, #filterSet, #filterFinish').on('keyup change', function() {
-            filterAll();
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', function() {
+                updateUI();
+                if (!this.checked && selectAll) selectAll.checked = false;
+            });
         });
         
-        // 3. RESTORE VIEW & LISTENERS
-        const savedView = localStorage.getItem('admin_view_mode') || 'grid';
-        toggleView(savedView);
-    });
-
-    function toggleView(mode) {
-        localStorage.setItem('admin_view_mode', mode);
-        
-        // Sync Buttons
-        $('#v-grid').prop('checked', mode === 'grid');
-        $('#v-list').prop('checked', mode === 'list');
-
-        if(mode === 'grid') {
-            $('#view-grid').removeClass('d-none');
-            $('#view-list').addClass('d-none');
-        } else {
-            $('#view-grid').addClass('d-none');
-            $('#view-list').removeClass('d-none');
-            if(table) table.columns.adjust().responsive.recalc();
-        }
-    }
-
-    function filterGrid(val) {
-        const term = val.toLowerCase();
-        $('.card-item').each(function() {
-            const name = $(this).data('name').toLowerCase();
-            const set = $(this).data('set').toLowerCase();
-            if (name.includes(term) || set.includes(term)) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
-        });
-    }
-
-    function filterAll() {
-        // Combined search from Main Search bar OR Filter Search bar
-        const searchVal1 = $('#searchInput').val().toLowerCase();
-        const searchVal2 = $('#searchInputFilter').val().toLowerCase();
-        const search = searchVal1 || searchVal2;
-        
-        const game = $('#filterGame').val();
-        const set = $('#filterSet').val();
-        const finish = $('#filterFinish').val();
-
-        // Filter Grid
-        $('.card-item').each(function() {
-            const $el = $(this);
-            const matchesSearch = $el.data('name').toLowerCase().includes(search);
-            const matchesGame = !game || $el.data('game') === game;
-            const matchesSet = !set || $el.data('set') === set;
-            const matchesFinish = !finish || $el.data('finish') === finish;
-
-            if (matchesSearch && matchesGame && matchesSet && matchesFinish) {
-                $el.show();
-            } else {
-                $el.hide();
-            }
-        });
-
-        // Filter List Table
-        table.search(search);
-        if(game) table.column(0).search(game, true, false); 
-        table.draw();
-    }
-
-    function openSaleModal(cardId, cardName, maxQty, unitPrice) {
-        $('#saleCardName').text(cardName);
-        $('#saleForm').attr('action', '/update_card/' + cardId);
-        
-        currentUnitPrice = unitPrice;
-        const select = $('#saleQtySelect');
-        select.empty();
-        
-        for (let i = 1; i <= maxQty; i++) {
-            select.append(new Option(i, i));
-        }
-        
-        // Set initial total
-        $('#saleTotalInput').val((unitPrice * 1).toFixed(2));
-        
-        new bootstrap.Modal(document.getElementById('saleModal')).show();
-    }
-
-    // Auto-calc total when qty changes
-    $(document).on('change', '#saleQtySelect', function() {
-        const qty = $(this).val();
-        const total = (qty * currentUnitPrice).toFixed(2);
-        $('#saleTotalInput').val(total);
-    });
-
-    // --- API FALLBACK QUEUE (For Admin Grid) ---
-    document.addEventListener("DOMContentLoaded", function() {
-        const queue = Array.from(document.querySelectorAll('img.needs-fetch'));
-        const RATE_LIMIT_DELAY = 150; 
-        processNext();
-
-        function processNext() {
-            if (queue.length === 0) return;
-            const img = queue.shift();
-            const cardSlot = img.closest('.card-slot');
-            if (cardSlot) {
-                fetchCardImage(cardSlot, img).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
-            } else { processNext(); }
-        }
-
-        async function fetchCardImage(card, imgEl) {
-            const game = (card.dataset.game || "").toLowerCase();
-            const name = card.dataset.name;
-            const set = (card.dataset.set || "").trim();
-            const loader = card.querySelector('.skeleton-loader');
-
-            try {
-                if (game.includes('magic') || game.includes('mtg')) {
-                    let query = `https://api.scryfall.com/cards/search?q=name:"${encodeURIComponent(name)}"`;
-                    if (set) query += `+set:"${encodeURIComponent(set)}"`;
-                    let r = await fetch(query);
-                    if (!r.ok) r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-                    if(!r.ok) throw new Error("404");
-                    const d = await r.json();
-                    let target = d.data && d.data.length > 0 ? d.data[0] : d;
-                    if (target.image_uris) applySrc(imgEl, loader, target.image_uris.normal);
-                    else if (target.card_faces) applySrc(imgEl, loader, target.card_faces[0].image_uris.normal);
-                    else throw new Error("No Img");
-                } 
-                else if (game.includes('pokemon') || game.includes('pkmn')) {
-                    const cleanName = name.split('(')[0].trim();
-                    let query = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`;
-                    if (set) query += ` set.name:"${encodeURIComponent(set)}"`;
-                    let r = await fetch(query);
-                    let d = await r.json();
-                    if (!d.data || d.data.length === 0) { r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`); d = await r.json(); }
-                    if (d.data && d.data.length > 0) applySrc(imgEl, loader, d.data[0].images.small);
-                    else throw new Error("No Img");
-                } 
-                else { loadFallback(imgEl, loader, 'default'); }
-            } catch (error) { loadFallback(imgEl, loader, game.includes('pokemon') ? 'pokemon' : 'default'); }
-        }
-        function applySrc(img, loader, src) { img.src = src; }
-        function loadFallback(img, loader, type) {
-            let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
-            if (type === 'pokemon') backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
-            img.src = backSrc; img.style.opacity = "0.3"; 
-            if(loader) loader.classList.add('hidden'); img.classList.add('loaded');
-        }
+        // Expose to window so the "Cancel" button works
+        window.clearSelection = function() {
+            checkboxes.forEach(cb => cb.checked = false);
+            if(selectAll) selectAll.checked = false;
+            updateUI();
+        };
     });
 </script>
 {% endblock %}

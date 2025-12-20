@@ -449,5 +449,60 @@ def update_card(id):
     db.session.commit()
     return redirect(url_for('admin'))
 
+
+@app.route('/bulk_actions', methods=['POST'])
+@login_required
+def bulk_actions():
+    # 1. Get the list of checked IDs (returns a list of strings like ['1', '5', '9'])
+    card_ids = request.form.getlist('card_ids')
+    action = request.form.get('action')
+    
+    if not card_ids:
+        flash("No cards selected.")
+        return redirect(url_for('admin'))
+
+    count = 0
+    
+    try:
+        # 2. Iterate through every selected card
+        for c_id in card_ids:
+            card = Card.query.get(int(c_id))
+            
+            # Security Check: Ensure card exists AND belongs to you
+            if card and card.user_id == current_user.id:
+                
+                if action == 'delete':
+                    db.session.delete(card)
+                    count += 1
+                    
+                elif action == 'sell':
+                    # Create the Sale record
+                    total_price = card.price * card.quantity
+                    sale = Sale(
+                        user_id=current_user.id,
+                        card_name=card.card_name,
+                        set_name=card.set_name,
+                        sale_price=total_price,
+                        quantity=card.quantity
+                    )
+                    db.session.add(sale)
+                    
+                    # Remove from inventory
+                    db.session.delete(card) 
+                    count += 1
+
+        db.session.commit()
+        
+        if action == 'delete':
+            flash(f"Deleted {count} cards.")
+        elif action == 'sell':
+            flash(f"Sold {count} lots successfully.")
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error: {str(e)}")
+
+    return redirect(url_for('admin'))
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
