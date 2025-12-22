@@ -6,14 +6,31 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_session import Session
+from flask_mail import Mail, Message
 
 app = Flask(__name__)
 
 # --- Configuration ---
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_key')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///inventory.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///inventory.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# --- Session Config (Shopping Cart) ---
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_PERMANENT"] = False
+Session(app)
+
+# --- Email Config (SMTP2GO) ---
+app.config['MAIL_SERVER'] = os.environ.get("SMTP_HOST", "mail.smtp2go.com")
+app.config['MAIL_PORT'] = int(os.environ.get("SMTP_PORT", 2525))
+app.config['MAIL_USERNAME'] = os.environ.get("SMTP_USER")
+app.config['MAIL_PASSWORD'] = os.environ.get("SMTP_PASS")
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get("FROM_EMAIL", "sales@fludmedia.com")
+
+mail = Mail(app)
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -173,6 +190,102 @@ def api_inventory(username):
             'variant': card.variant
         })
     return jsonify(data)
+
+# --- NEW: CART & QUOTE SYSTEM ---
+
+@app.route('/cart/add/<int:card_id>')
+def add_to_cart(card_id):
+    if 'cart' not in session:
+        session['cart'] = []
+    
+    # Check if card exists and has quantity
+    card = Card.query.get(card_id)
+    if card and card.quantity > 0:
+        if card_id not in session['cart']:
+            session['cart'].append(card_id)
+            flash(f"Added {card.card_name} to quote request.")
+        else:
+            flash("Item already in quote.")
+    
+    # Redirect back to where the user came from (or index if unknown)
+    return redirect(request.referrer or url_for('index'))
+
+@app.route('/cart/remove/<int:card_id>')
+def remove_from_cart(card_id):
+    if 'cart' in session and card_id in session['cart']:
+        session['cart'].remove(card_id)
+        flash("Item removed.")
+    return redirect(url_for('view_cart'))
+
+@app.route('/cart')
+def view_cart():
+    cart_ids = session.get('cart', [])
+    
+    # Fetch card objects from DB
+    cart_items = []
+    est_total = 0.0
+    
+    if cart_ids:
+        # We fetch only valid IDs
+        cart_items = Card.query.filter(Card.id.in_(cart_ids)).all()
+        # Calculate estimated total
+        est_total = sum(c.price for c in cart_items if c.price)
+    
+    return render_template('cart.html', cart=cart_items, total=est_total)
+
+@app.route('/submit-quote', methods=['POST'])
+def submit_quote():
+    cart_ids = session.get('cart', [])
+    if not cart_ids:
+        flash("Cart is empty.")
+        return redirect(url_for('index'))
+
+    customer_email = request.form.get('email')
+    customer_note = request.form.get('notes')
+    
+    # Get card details
+    cart_items = Card.query.filter(Card.id.in_(cart_ids)).all()
+    
+    if not cart_items:
+        flash("Error: No valid items found.")
+        return redirect(url_for('view_cart'))
+
+    # Construct Email Body
+    item_list = ""
+    for c in cart_items:
+        price_str = f"${c.price:.2f}" if c.price else "Check Market"
+        item_list += f"- 1x {c.card_name} ({c.set_name}) [{c.condition}] - {price_str}\n"
+
+    email_body = f"""
+    New Quote Request
+    =================
+    Customer Email: {customer_email}
+    
+    Items Requested:
+    {item_list}
+    
+    Customer Notes:
+    {customer_note}
+    """
+    
+    # Send Email
+    try:
+        msg = Message(
+            subject=f"TCG Quote Request: {len(cart_items)} Items",
+            recipients=[os.environ.get("ADMIN_EMAIL")], 
+            body=email_body,
+            reply_to=customer_email
+        )
+        mail.send(msg)
+        
+        # Clear Cart on Success
+        session.pop('cart', None)
+        return render_template('success.html')
+        
+    except Exception as e:
+        flash(f"Error sending email: {str(e)}")
+        return redirect(url_for('view_cart'))
+
 
 # --- ADMIN PANEL ---
 
