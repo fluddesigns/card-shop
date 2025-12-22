@@ -5,9 +5,24 @@
 {% block styles %}
 <style>
     .shop-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2rem 1rem; text-align: center; border-radius: 0 0 15px 15px; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-    .contact-badge { background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; display: inline-block; margin-top: 10px; backdrop-filter: blur(5px); text-decoration: none; color: white; transition: background 0.2s; }
-    .contact-badge:hover { background: rgba(255,255,255,0.3); color: white; }
-    .contact-badge a { color: white; text-decoration: none; }
+    
+    /* Updated Badge Styling to be more button-like */
+    .contact-badge { 
+        padding: 8px 20px; 
+        border-radius: 50px; 
+        display: inline-flex; 
+        align-items: center; 
+        text-decoration: none; 
+        color: white !important; 
+        transition: transform 0.2s, box-shadow 0.2s; 
+        font-weight: 500;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .contact-badge:hover { 
+        transform: translateY(-2px); 
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15); 
+        color: white !important;
+    }
     
     .view-toggle .btn-check:checked + .btn-outline-primary { background-color: #1e3c72; border-color: #1e3c72; color: white; }
 
@@ -52,14 +67,14 @@
     <h1 class="fw-bold">{{ owner.username|capitalize }}'s Collection</h1>
     <p class="mb-0 opacity-75">Browse available singles.</p>
     
-    <div class="d-flex justify-content-center gap-2 mt-3">
-        <div class="contact-badge">
-            <a href="https://www.m.me/fludblake" target="_blank">👋 Click to Message</a>
-        </div>
+    <div class="d-flex justify-content-center flex-wrap gap-3 mt-4">
+        <a href="https://www.m.me/fludblake" target="_blank" class="contact-badge bg-primary border border-primary">
+            <span class="me-2">👋</span> Message Me
+        </a>
 
         <a href="{{ url_for('view_cart') }}" class="contact-badge bg-success border border-success">
-            🛒 Request Quote
-            <span id="headerCartCount" class="badge bg-danger rounded-pill ms-1" style="display: {{ 'inline-block' if session.get('cart') else 'none' }};">
+            <span class="me-2">🛒</span> Request Quote
+            <span id="headerCartCount" class="badge bg-danger rounded-pill ms-2" style="display: {{ 'inline-block' if session.get('cart') else 'none' }};">
                 {{ session.get('cart')|length if session.get('cart') else 0 }}
             </span>
         </a>
