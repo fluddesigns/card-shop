@@ -198,16 +198,26 @@ def add_to_cart(card_id):
     if 'cart' not in session:
         session['cart'] = []
     
-    # Check if card exists and has quantity
     card = Card.query.get(card_id)
     if card and card.quantity > 0:
         if card_id not in session['cart']:
             session['cart'].append(card_id)
-            flash(f"Added {card.card_name} to quote request.")
+            # If standard request, use Flash. If AJAX, suppress Flash.
+            if not request.args.get('ajax'):
+                flash(f"Added {card.card_name} to quote request.")
         else:
-            flash("Item already in quote.")
+            if not request.args.get('ajax'):
+                flash("Item already in quote.")
     
-    # Redirect back to where the user came from (or index if unknown)
+    # AJAX Response (No Reload)
+    if request.args.get('ajax'):
+        return jsonify({
+            'status': 'success', 
+            'count': len(session['cart']),
+            'id': card_id
+        })
+    
+    # Standard Response (Reloads Page)
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/cart/remove/<int:card_id>')

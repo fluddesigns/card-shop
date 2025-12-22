@@ -26,7 +26,7 @@
     /* Price Badge (Top Right) */
     .price-badge { position: absolute; top: 8px; right: 8px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; pointer-events: none; }
     
-    /* NEW: Cart Action Badge (Top Left) */
+    /* Cart Action Badge (Top Left) */
     .cart-action { position: absolute; top: 8px; left: 8px; z-index: 100; }
     .btn-add-quote { font-size: 0.75rem; padding: 2px 8px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
 
@@ -59,9 +59,9 @@
 
         <a href="{{ url_for('view_cart') }}" class="contact-badge bg-success border border-success">
             🛒 Request Quote
-            {% if session.get('cart') %}
-            <span class="badge bg-danger rounded-pill ms-1">{{ session.get('cart')|length }}</span>
-            {% endif %}
+            <span id="headerCartCount" class="badge bg-danger rounded-pill ms-1" style="display: {{ 'inline-block' if session.get('cart') else 'none' }};">
+                {{ session.get('cart')|length if session.get('cart') else 0 }}
+            </span>
         </a>
     </div>
 </div>
@@ -119,7 +119,7 @@
             
             {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
             <div class="cart-action">
-                <a href="{{ url_for('add_to_cart', card_id=card.id) }}" class="btn btn-primary btn-sm btn-add-quote">+ Quote</a>
+                <a href="{{ url_for('add_to_cart', card_id=card.id) }}" class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
             </div>
             {% endif %}
 
@@ -158,7 +158,8 @@
                             <th>Cond</th>
                             {% if show_prices %}<th>Price</th>{% endif %}
                             <th>Qty</th>
-                            <th>Action</th> </tr>
+                            <th>Action</th>
+                        </tr>
                     </thead>
                     <tbody>
                         {% for card in inventory %}
@@ -172,7 +173,7 @@
                             <td>{{ card.quantity }}</td>
                             <td>
                                 {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
-                                <a href="{{ url_for('add_to_cart', card_id=card.id) }}" class="btn btn-sm btn-outline-primary py-0">+ Quote</a>
+                                <a href="{{ url_for('add_to_cart', card_id=card.id) }}" class="btn btn-sm btn-outline-primary py-0 ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
                                 {% else %}
                                 <span class="text-muted small">-</span>
                                 {% endif %}
@@ -208,6 +209,47 @@
     }
 
     $(document).ready(function () {
+        // --- NEW: AJAX ADD TO CART ---
+        $(document).on('click', '.ajax-cart-btn', function(e) {
+            e.preventDefault();
+            const btn = $(this);
+            const cardId = btn.data('card-id');
+            const originalText = btn.text();
+            
+            // Visual Feedback: Adding...
+            btn.prop('disabled', true).text('...');
+            
+            $.ajax({
+                url: '/cart/add/' + cardId,
+                type: 'GET',
+                data: { ajax: 1 },
+                success: function(response) {
+                    // Update Badge
+                    const count = response.count;
+                    const badge = $('#headerCartCount');
+                    badge.text(count);
+                    badge.show();
+
+                    // Visual Feedback: Success
+                    btn.removeClass('btn-primary btn-outline-primary')
+                       .addClass('btn-success')
+                       .text('✓');
+                    
+                    // Reset button after 2 seconds
+                    setTimeout(function() {
+                        btn.removeClass('btn-success')
+                           .addClass('btn-primary')
+                           .text(originalText)
+                           .prop('disabled', false);
+                    }, 2000);
+                },
+                error: function() {
+                    alert('Error adding to cart');
+                    btn.text('Error').prop('disabled', false);
+                }
+            });
+        });
+
         dataTable = $('#inventoryTable').DataTable({
             responsive: true,
             pageLength: 50,
@@ -216,8 +258,8 @@
             order: [[5, 'desc']], 
             columnDefs: [
                 { responsivePriority: 1, targets: 0 }, 
-                { responsivePriority: 2, targets: -1 }, // Prioritize Action Column
-                { orderable: false, targets: -1 } // Disable sorting on Action column
+                { responsivePriority: 2, targets: -1 }, 
+                { orderable: false, targets: -1 } 
             ]
         });
 
@@ -285,10 +327,7 @@
                 }
             });
 
-            // Update DataTable search
             dataTable.search(search).draw();
-            // Note: Column indices shifted due to new Action column? No, Action is last.
-            // Check column indices: 0:Name, 1:Set, 2:Game, ...
             dataTable.column(2).search(game ? '^'+$.fn.dataTable.util.escapeRegex(game)+'$' : '', true, false).draw();
             dataTable.column(1).search(set ? '^'+$.fn.dataTable.util.escapeRegex(set)+'$' : '', true, false).draw();
             
