@@ -17,7 +17,7 @@ services:
       - SMTP_USER=fludmedia.com
       - SMTP_PASS=BAF2025Winry!
       - FROM_EMAIL=admin@fludmedia.com
-      - ADMIN_EMAIL=replace_with_your_personal_email@gmail.com
+      - ADMIN_EMAIL=blakeflud@gmail.com
 
   tunnel:
     image: cloudflare/cloudflared:latest
