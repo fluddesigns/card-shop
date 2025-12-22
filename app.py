@@ -250,33 +250,52 @@ def submit_quote():
         flash("Error: No valid items found.")
         return redirect(url_for('view_cart'))
 
-    # Construct Email Body
+    # Build the Item List
     item_list = ""
     for c in cart_items:
         price_str = f"${c.price:.2f}" if c.price else "Check Market"
         item_list += f"- 1x {c.card_name} ({c.set_name}) [{c.condition}] - {price_str}\n"
 
-    email_body = f"""
-    New Quote Request
-    =================
-    Customer Email: {customer_email}
-    
-    Items Requested:
-    {item_list}
-    
-    Customer Notes:
-    {customer_note}
-    """
-    
-    # Send Email
     try:
-        msg = Message(
+        # --- EMAIL 1: NOTIFICATION TO ADMIN (YOU) ---
+        admin_body = f"""
+        New Quote Request
+        =================
+        Customer Email: {customer_email}
+        
+        Items Requested:
+        {item_list}
+        
+        Customer Notes:
+        {customer_note}
+        """
+        
+        msg_admin = Message(
             subject=f"TCG Quote Request: {len(cart_items)} Items",
             recipients=[os.environ.get("ADMIN_EMAIL")], 
-            body=email_body,
+            body=admin_body,
             reply_to=customer_email
         )
-        mail.send(msg)
+        mail.send(msg_admin)
+
+        # --- EMAIL 2: CONFIRMATION TO CUSTOMER (THEM) ---
+        customer_body = f"""
+        Hello!
+        
+        We have received your request for the following cards:
+        {item_list}
+        
+        We will review availability and pricing and email you back shortly at this address.
+        
+        Thank you!
+        """
+        
+        msg_customer = Message(
+            subject="Quote Request Received - Flud Media",
+            recipients=[customer_email],
+            body=customer_body
+        )
+        mail.send(msg_customer)
         
         # Clear Cart on Success
         session.pop('cart', None)
