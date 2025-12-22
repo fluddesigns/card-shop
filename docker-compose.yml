@@ -14,9 +14,9 @@ services:
       # Note: ADMIN_PASSWORD is no longer needed as we use database users now
       - SMTP_HOST=mail.smtp2go.com
       - SMTP_PORT=2525
-      - SMTP_USER=replace_with_smtp2go_username
-      - SMTP_PASS=replace_with_smtp2go_password
-      - FROM_EMAIL=sales@fludmedia.com
+      - SMTP_USER=fludmedia.com
+      - SMTP_PASS=BAF2025Winry!
+      - FROM_EMAIL=admin@fludmedia.com
       - ADMIN_EMAIL=replace_with_your_personal_email@gmail.com
 
   tunnel:
