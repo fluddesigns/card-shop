@@ -265,27 +265,43 @@ def search_reference():
 @app.route('/admin/sync_db', methods=['POST'])
 @login_required
 def sync_db():
+    """
+    Standard, non-hacky implementation to fetch cards from PokemonTCG.io
+    Reference: https://docs.pokemontcg.io/
+    """
     if not current_user.is_admin:
         return redirect(url_for('admin'))
     
     try:
         flash("Sync connection initialized...")
         
-        # CHANGED: Standard endpoint, clean User-Agent, using params dict
+        # 1. Official V2 Endpoint
         api_url = "https://api.pokemontcg.io/v2/cards"
+        
+        # 2. Standard Query Parameters
         params = {'pageSize': 10} 
+        
+        # 3. Headers: Identification & Auth
+        # Note: If you have an API key, set it in your Docker/System ENV as POKEMONTCG_IO_KEY
         headers = {
-            'User-Agent': 'FludInventory/1.0',
+            'User-Agent': 'FludInventory/1.0', # Honest identification
             'Accept': 'application/json'
         }
         
-        print(f"DEBUG: Connecting to {api_url}", flush=True)
+        api_key = os.environ.get('POKEMONTCG_IO_KEY')
+        if api_key:
+            headers['X-Api-Key'] = api_key
+
+        print(f"DEBUG: Connecting to {api_url} with params {params}", flush=True)
+        
+        # 4. Standard Request (Verify SSL = True)
         r = requests.get(api_url, params=params, headers=headers, timeout=30)
+        
         print(f"DEBUG: API Status Code: {r.status_code}", flush=True)
         
         if r.status_code != 200:
-            print(f"DEBUG: Error Response Body: {r.text}", flush=True)
-            flash(f"Sync Failed: API returned status {r.status_code}")
+            print(f"DEBUG: Error Body: {r.text}", flush=True)
+            flash(f"Sync Failed: API returned status {r.status_code}. Check logs for details.")
             return redirect(url_for('admin'))
 
         try:
@@ -318,8 +334,9 @@ def sync_db():
         else:
             flash("Sync Failed: API response missing 'data' field.")
             
-    except requests.exceptions.ReadTimeout:
-        flash("Sync Failed: Connection timed out (API was too slow). Try again later.")
+    except requests.exceptions.SSLError as e:
+        print(f"DEBUG: SSL Error: {e}", flush=True)
+        flash("SSL Error: Your server is missing root certificates. Please update your Dockerfile.")
     except requests.exceptions.RequestException as e:
         print(f"DEBUG: Connection Error: {e}", flush=True)
         flash(f"Connection Error: {str(e)}")
