@@ -6,22 +6,8 @@
 <style>
     .shop-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2rem 1rem; text-align: center; border-radius: 0 0 15px 15px; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
     
-    .contact-badge { 
-        padding: 8px 20px; 
-        border-radius: 50px; 
-        display: inline-flex; 
-        align-items: center; 
-        text-decoration: none; 
-        color: white !important; 
-        transition: transform 0.2s, box-shadow 0.2s; 
-        font-weight: 500;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .contact-badge:hover { 
-        transform: translateY(-2px); 
-        box-shadow: 0 6px 12px rgba(0,0,0,0.15); 
-        color: white !important;
-    }
+    .contact-badge { padding: 8px 20px; border-radius: 50px; display: inline-flex; align-items: center; text-decoration: none; color: white !important; font-weight: 500; }
+    .contact-badge:hover { transform: translateY(-2px); color: white !important; }
     
     .view-toggle .btn-check:checked + .btn-outline-primary { background-color: #1e3c72; border-color: #1e3c72; color: white; }
 
@@ -31,50 +17,26 @@
     .card-slot { border: none; border-radius: 10px; overflow: hidden; background: #2c3e50; position: relative; aspect-ratio: 2.5/3.5; transition: transform 0.2s; cursor: pointer; }
     .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); }
     
-    /* --- NEW: GRADED SLAB STYLING --- */
-    .slab-slot {
-        background: transparent !important;
-        overflow: visible !important;
-        aspect-ratio: auto !important; /* Let height grow naturally */
-    }
-    .slab-container {
-        border-radius: 12px;
-        overflow: hidden;
-        background: #333;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-        border: 4px solid #444; /* Plastic case edge */
-        position: relative;
-    }
-    .slab-header {
-        color: white;
-        padding: 5px 8px;
-        font-size: 0.7rem;
-        text-align: center;
-        border-bottom: 2px solid rgba(255,255,255,0.2);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        min-height: 50px;
-    }
+    /* Slab Styling */
+    .slab-slot { background: transparent !important; overflow: visible !important; aspect-ratio: auto !important; }
+    .slab-container { border-radius: 12px; overflow: hidden; background: #333; box-shadow: 0 4px 10px rgba(0,0,0,0.4); border: 4px solid #444; position: relative; }
+    .slab-header { color: white; padding: 5px 8px; font-size: 0.7rem; text-align: center; border-bottom: 2px solid rgba(255,255,255,0.2); display: flex; flex-direction: column; justify-content: center; min-height: 50px; }
     .slab-grade { font-size: 1.4rem; font-weight: 800; line-height: 1; margin-top: 2px; }
     .slab-company { font-weight: bold; letter-spacing: 1px; text-transform: uppercase; opacity: 0.9; }
     
     /* Company Colors */
-    .slab-PSA .slab-header { background: linear-gradient(to bottom, #e74c3c, #c0392b); border: 1px solid #c0392b; color: white; }
-    .slab-CGC .slab-header { background: linear-gradient(to bottom, #3498db, #2980b9); color: white; }
-    .slab-TAG .slab-header { background: linear-gradient(to bottom, #2c3e50, #000); border-bottom: 1px solid #7f8c8d; }
+    .slab-PSA .slab-header { background: linear-gradient(to bottom, #e74c3c, #c0392b); border: 1px solid #c0392b; }
+    .slab-CGC .slab-header { background: linear-gradient(to bottom, #3498db, #2980b9); }
+    .slab-TAG .slab-header { background: linear-gradient(to bottom, #2c3e50, #000); }
     .slab-BGS .slab-header { background: linear-gradient(to bottom, #f1c40f, #f39c12); color: black; }
-    .slab-SGC .slab-header { background: black; color: white; border: 1px solid #555; }
+    .slab-SGC .slab-header { background: black; border: 1px solid #555; }
     
-    /* Adjust image inside slab */
-    .slab-image-wrapper {
-        position: relative;
-        aspect-ratio: 2.5/3.5;
-        background: #2c3e50;
-    }
-    /* ------------------------------ */
+    .slab-image-wrapper { position: relative; aspect-ratio: 2.5/3.5; background: #2c3e50; }
     
-    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; opacity: 0; }
+    /* 1st Edition Badge */
+    .edition-badge { position: absolute; top: 8px; left: 8px; background: #f1c40f; color: black; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; z-index: 5; border: 1px solid #b7950b; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+
+    .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; opacity: 0; transition: opacity 0.3s; }
     .card-image.loaded { opacity: 1; }
     
     .skeleton-loader { width: 100%; height: 100%; background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); background-size: 200% 100%; animation: loading 1.5s infinite; position: absolute; top: 0; left: 0; z-index: 2; }
@@ -83,169 +45,112 @@
     @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     
     .price-badge { position: absolute; top: 8px; right: 8px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; pointer-events: none; }
-    
-    .cart-action { position: absolute; top: 8px; left: 8px; z-index: 100; }
-    .btn-add-quote { font-size: 0.75rem; padding: 2px 8px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
-
+    .cart-action { position: absolute; bottom: 35px; right: 8px; z-index: 100; }
     .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; pointer-events: none; }
     
     .filter-bar { background: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #dee2e6; }
-    .filter-label { font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase; margin-bottom: 4px; }
 </style>
 {% endblock %}
 
 {% block content %}
 <script>
     function imageLoaded(id) {
-        const loader = document.getElementById('loader-' + id);
-        const img = document.getElementById('img-' + id);
-        if (loader) loader.classList.add('hidden');
-        if (img) img.classList.add('loaded');
+        document.getElementById('loader-' + id).classList.add('hidden');
+        document.getElementById('img-' + id).classList.add('loaded');
     }
-    function imageFailed(img, id) { img.classList.add('needs-fetch'); }
 </script>
 
 <div class="shop-header text-center">
     <h1 class="fw-bold">{{ owner.username|capitalize }}'s Collection</h1>
     <p class="mb-0 opacity-75">Browse available singles & slabs.</p>
-    
     <div class="d-flex justify-content-center flex-wrap gap-3 mt-4">
-        <a href="https://www.m.me/fludblake" target="_blank" class="contact-badge bg-primary border border-primary">
-            <span class="me-2">👋</span> Message Me
-        </a>
-
+        <a href="https://www.m.me/fludblake" target="_blank" class="contact-badge bg-primary border border-primary">👋 Message Me</a>
         <a href="{{ url_for('view_cart') }}" class="contact-badge bg-success border border-success">
-            <span class="me-2">🛒</span> Request Quote
-            <span id="headerCartCount" class="badge bg-danger rounded-pill ms-2" style="display: {{ 'inline-block' if session.get('cart') else 'none' }};">
-                {{ session.get('cart')|length if session.get('cart') else 0 }}
-            </span>
+            🛒 Quote <span id="headerCartCount" class="badge bg-danger rounded-pill ms-2" style="display: {{ 'inline-block' if session.get('cart') else 'none' }};">{{ session.get('cart')|length if session.get('cart') else 0 }}</span>
         </a>
     </div>
 </div>
 
 <div class="container-fluid px-3">
-    
     <div class="filter-bar shadow-sm">
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
-                <label class="filter-label">Search</label>
-                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search by name...">
+                <label class="small fw-bold text-muted">Search</label>
+                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search...">
             </div>
             <div class="col-6 col-md-2">
-                <label class="filter-label">Sort By</label>
+                <label class="small fw-bold text-muted">Sort</label>
                 <select id="sortGrid" class="form-select form-select-sm">
-                    <option value="price-desc">Price: High to Low</option>
-                    <option value="price-asc">Price: Low to High</option>
-                    <option value="name-asc" selected>Name: A to Z</option>
-                    <option value="set-asc">Set: A to Z</option>
+                    <option value="price-desc">Price: High</option>
+                    <option value="price-asc">Price: Low</option>
+                    <option value="name-asc">Name: A-Z</option>
                 </select>
             </div>
             <div class="col-6 col-md-2">
-                <label class="filter-label">Game</label>
-                <select id="filterGame" class="form-select form-select-sm"><option value="">All Games</option></select>
+                <label class="small fw-bold text-muted">Game</label>
+                <select id="filterGame" class="form-select form-select-sm"><option value="">All</option></select>
             </div>
-            <div class="col-6 col-md-2">
-                <label class="filter-label">Set</label>
-                <select id="filterSet" class="form-select form-select-sm"><option value="">All Sets</option></select>
+             <div class="col-6 col-md-2">
+                <label class="small fw-bold text-muted">Set</label>
+                <select id="filterSet" class="form-select form-select-sm"><option value="">All</option></select>
             </div>
-            <div class="col-6 col-md-3">
-                <div class="d-flex justify-content-end align-items-end h-100">
-                    <div class="btn-group view-toggle" role="group">
-                        <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onchange="toggleView('grid')">
-                        <label class="btn btn-sm btn-outline-primary" for="v-grid">🖼️ Grid</label>
-                        <input type="radio" class="btn-check" name="viewmode" id="v-list" onchange="toggleView('list')">
-                        <label class="btn btn-sm btn-outline-primary" for="v-list">📋 List</label>
-                    </div>
+            <div class="col-6 col-md-3 text-end">
+                 <div class="btn-group view-toggle">
+                    <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onclick="toggleView('grid')">
+                    <label class="btn btn-sm btn-outline-primary" for="v-grid">Grid</label>
+                    <input type="radio" class="btn-check" name="viewmode" id="v-list" onclick="toggleView('list')">
+                    <label class="btn btn-sm btn-outline-primary" for="v-list">List</label>
                 </div>
             </div>
         </div>
-        <div class="mt-2 text-muted small text-end">
-            Showing <span id="visibleCount" class="fw-bold">{{ inventory|length }}</span> cards
-        </div>
+        <div class="mt-2 text-muted small text-end">Showing <span id="visibleCount">{{ inventory|length }}</span> cards</div>
     </div>
 
     <div id="view-grid" class="binder-grid">
         {% for card in inventory %}
-        
-        {% if card.grading_company %}
-        <div class="card-slot slab-slot card-item"
-             data-game="{{ card.game }}" 
-             data-name="{{ card.card_name }}" 
-             data-set="{{ card.set_name }}"
-             data-finish="{{ card.finish }}"
-             data-condition="{{ card.condition }}"
-             data-price="{{ card.price }}">
-             
-             <div class="slab-container slab-{{ card.grading_company }}">
-                <div class="slab-header">
-                    <span class="slab-company">{{ card.grading_company }}</span>
-                    <span class="slab-grade">{{ card.grade }}</span>
-                    {% if card.cert_number %}<span style="font-size:0.6rem; opacity:0.7;">#{{ card.cert_number }}</span>{% endif %}
-                </div>
-
-                <div class="slab-image-wrapper">
-                    {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
-                    <div class="cart-action">
-                        <a href="{{ url_for('add_to_cart', card_id=card.id) }}" class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
+            <div class="card-slot {% if card.grading_company %}slab-slot{% endif %} card-item"
+                 data-game="{{ card.game }}" data-name="{{ card.card_name }}" data-set="{{ card.set_name }}" data-price="{{ card.price }}">
+                 
+                 {% if card.grading_company %}
+                 <div class="slab-container slab-{{ card.grading_company }}">
+                    <div class="slab-header">
+                        <span class="slab-company">{{ card.grading_company }}</span>
+                        <span class="slab-grade">{{ card.grade }}</span>
+                        {% if card.cert_number %}<span style="font-size:0.6rem; opacity:0.7;">#{{ card.cert_number }}</span>{% endif %}
                     </div>
-                    {% endif %}
-
-                    {% if show_prices %}
-                    <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
-                    {% endif %}
-
-                    <div class="skeleton-loader" id="loader-{{ card.id }}"></div>
-                    <img class="card-image {% if not card.image_url %}needs-fetch{% endif %}" 
-                         id="img-{{ card.id }}"
-                         src="{{ card.image_url if card.image_url else '' }}" 
-                         alt="{{ card.card_name }}" 
-                         loading="lazy"
-                         onload="imageLoaded('{{ card.id }}')"
-                         onerror="imageFailed(this, '{{ card.id }}')">
-                </div>
-             </div>
-             
-             <div class="text-center mt-1" style="font-size: 0.75rem; color: #444; font-weight: bold; line-height: 1.2;">
-                 {{ card.card_name }}
-                 <div class="text-muted fw-normal">{{ card.set_name }}</div>
-             </div>
-        </div>
-
-        {% else %}
-        <div class="card-slot card-item" 
-             data-game="{{ card.game }}" 
-             data-name="{{ card.card_name }}" 
-             data-set="{{ card.set_name }}"
-             data-finish="{{ card.finish }}"
-             data-condition="{{ card.condition }}"
-             data-price="{{ card.price }}">
-            
-            {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
-            <div class="cart-action">
-                <a href="{{ url_for('add_to_cart', card_id=card.id) }}" class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
+                    <div class="slab-image-wrapper">
+                        {% if card.is_first_edition %}<div class="edition-badge">1st Edition</div>{% endif %}
+                        
+                        {% if show_prices %}<div class="price-badge">${{ "%.2f"|format(card.price) }}</div>{% endif %}
+                        <div class="skeleton-loader" id="loader-{{ card.id }}"></div>
+                        <img class="card-image {% if not card.image_url %}needs-fetch{% endif %}" id="img-{{ card.id }}" src="{{ card.image_url or '' }}" loading="lazy" onload="imageLoaded('{{ card.id }}')">
+                        
+                         {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
+                        <div class="cart-action" style="top:auto; bottom:10px; right:10px; left:auto;">
+                             <a href="#" class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                 </div>
+                 {% else %}
+                 {% if card.is_first_edition %}<div class="edition-badge">1st Edition</div>{% endif %}
+                 {% if show_prices %}<div class="price-badge">${{ "%.2f"|format(card.price) }}</div>{% endif %}
+                 
+                 <div class="skeleton-loader" id="loader-{{ card.id }}"></div>
+                 <img class="card-image {% if not card.image_url %}needs-fetch{% endif %}" id="img-{{ card.id }}" src="{{ card.image_url or '' }}" loading="lazy" onload="imageLoaded('{{ card.id }}')">
+                 
+                 {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
+                 <div class="cart-action" style="top:10px; left:10px;">
+                     <a href="#" class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
+                 </div>
+                 {% endif %}
+                 
+                 <div class="info-overlay">
+                     <div class="text-truncate fw-bold">{{ card.card_name }}</div>
+                     <div class="opacity-75">{{ card.set_name }}</div>
+                 </div>
+                 {% endif %}
             </div>
-            {% endif %}
-
-            {% if show_prices %}
-            <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
-            {% endif %}
-
-            <div class="skeleton-loader" id="loader-{{ card.id }}"></div>
-
-            <img class="card-image {% if not card.image_url %}needs-fetch{% endif %}" 
-                 id="img-{{ card.id }}"
-                 src="{{ card.image_url if card.image_url else '' }}" 
-                 alt="{{ card.card_name }}" 
-                 loading="lazy"
-                 onload="imageLoaded('{{ card.id }}')"
-                 onerror="imageFailed(this, '{{ card.id }}')">
-            
-            <div class="info-overlay">
-                <div class="text-truncate fw-bold">{{ card.card_name }}</div>
-                <div class="opacity-75">{{ card.set_name }} • {{ card.condition }}</div>
-            </div>
-        </div>
-        {% endif %}
         {% endfor %}
     </div>
 
@@ -253,44 +158,22 @@
         <div class="card shadow-sm">
             <div class="card-body p-0">
                 <table id="inventoryTable" class="table table-striped table-hover mb-0 w-100">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Set</th>
-                            <th>Game</th>
-                            <th>Finish</th>
-                            <th>Cond</th>
-                            {% if show_prices %}<th>Price</th>{% endif %}
-                            <th>Qty</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Name</th><th>Set</th><th>Game</th><th>Cond</th><th>Price</th><th>Action</th></tr></thead>
                     <tbody>
                         {% for card in inventory %}
-                        <tr>
+                        <tr class="card-item" data-game="{{ card.game }}" data-name="{{ card.card_name }}" data-set="{{ card.set_name }}" data-price="{{ card.price }}">
                             <td class="fw-bold">
                                 {{ card.card_name }}
-                                {% if card.grading_company %}
-                                <span class="badge bg-danger" style="font-size:0.7em;">{{ card.grading_company }} {{ card.grade }}</span>
-                                {% endif %}
+                                {% if card.is_first_edition %}<span class="badge bg-warning text-dark border border-dark ms-1">1st Ed</span>{% endif %}
+                                {% if card.grading_company %}<span class="badge bg-danger ms-1">{{ card.grading_company }} {{ card.grade }}</span>{% endif %}
                             </td>
                             <td>{{ card.set_name }}</td>
                             <td>{{ card.game }}</td>
-                            <td>{{ card.finish }}</td>
-                            <td>
-                                {% if card.grading_company %}
-                                    <span class="badge bg-dark">SLAB</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">{{ card.condition }}</span>
-                                {% endif %}
-                            </td>
-                            {% if show_prices %}<td class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>{% endif %}
-                            <td>{{ card.quantity }}</td>
+                            <td>{{ card.condition }}</td>
+                            <td class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
                             <td>
                                 {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
-                                <a href="{{ url_for('add_to_cart', card_id=card.id) }}" class="btn btn-sm btn-outline-primary py-0 ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
-                                {% else %}
-                                <span class="text-muted small">-</span>
+                                <a href="#" class="btn btn-sm btn-outline-primary ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
                                 {% endif %}
                             </td>
                         </tr>
@@ -305,206 +188,84 @@
 
 {% block scripts %}
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
 <script>
-    let dataTable;
-
     function toggleView(mode) {
-        if(mode === 'grid') {
-            $('#view-grid').removeClass('d-none');
-            $('#view-list').addClass('d-none');
-        } else {
-            $('#view-grid').addClass('d-none');
-            $('#view-list').removeClass('d-none');
-            if(dataTable) dataTable.columns.adjust().responsive.recalc();
-        }
+        if(mode === 'grid') { $('#view-grid').removeClass('d-none'); $('#view-list').addClass('d-none'); }
+        else { $('#view-grid').addClass('d-none'); $('#view-list').removeClass('d-none'); }
     }
 
     $(document).ready(function () {
-        // --- AJAX ADD TO CART ---
-        $(document).on('click', '.ajax-cart-btn', function(e) {
-            e.preventDefault();
-            const btn = $(this);
-            const cardId = btn.data('card-id');
-            const originalText = btn.text();
-            
-            btn.prop('disabled', true).text('...');
-            
-            $.ajax({
-                url: '/cart/add/' + cardId,
-                type: 'GET',
-                data: { ajax: 1 },
-                success: function(response) {
-                    const count = response.count;
-                    const badge = $('#headerCartCount');
-                    badge.text(count);
-                    badge.show();
-
-                    btn.removeClass('btn-primary btn-outline-primary')
-                       .addClass('btn-success')
-                       .text('✓');
-                    
-                    setTimeout(function() {
-                        btn.removeClass('btn-success')
-                           .addClass('btn-primary')
-                           .text(originalText)
-                           .prop('disabled', false);
-                    }, 2000);
-                },
-                error: function() {
-                    alert('Error adding to cart');
-                    btn.text('Error').prop('disabled', false);
-                }
-            });
-        });
-
-        dataTable = $('#inventoryTable').DataTable({
-            responsive: true,
-            pageLength: 50,
-            dom: 't', 
-            paging: false, 
-            order: [[5, 'desc']], 
-            columnDefs: [
-                { responsivePriority: 1, targets: 0 }, 
-                { responsivePriority: 2, targets: -1 }, 
-                { orderable: false, targets: -1 } 
-            ]
-        });
-
-        // POPULATE DROPDOWNS
+        // --- DATA COLLECTION FOR FILTERS ---
         const games = new Set();
         const sets = new Set();
         $('.card-item').each(function() {
             games.add($(this).data('game'));
             sets.add($(this).data('set'));
         });
-        populateSelect('#filterGame', games);
-        populateSelect('#filterSet', sets);
+        
+        Array.from(games).sort().forEach(val => $('#filterGame').append(new Option(val, val)));
+        Array.from(sets).sort().forEach(val => $('#filterSet').append(new Option(val, val)));
 
-        function populateSelect(selector, set) {
-            Array.from(set).filter(Boolean).sort().forEach(val => {
-                $(selector).append(new Option(val, val));
-            });
-        }
-
-        // FILTER EVENT
+        // --- FILTER & SORT LOGIC ---
         $('#searchInput, #filterGame, #filterSet').on('keyup change', function() {
-            filterAll();
-        });
-
-        // SORT EVENT
-        $('#sortGrid').on('change', function() {
-            const sortType = $(this).val();
-            const $grid = $('#view-grid');
-            const $cards = $grid.children('.card-item');
-
-            $cards.sort(function(a, b) {
-                let valA, valB;
-                switch(sortType) {
-                    case 'price-desc':
-                        return (parseFloat($(b).data('price')) || 0) - (parseFloat($(a).data('price')) || 0);
-                    case 'price-asc':
-                        return (parseFloat($(a).data('price')) || 0) - (parseFloat($(b).data('price')) || 0);
-                    case 'name-asc':
-                        return $(a).data('name').localeCompare($(b).data('name'));
-                    case 'set-asc':
-                        return $(a).data('set').localeCompare($(b).data('set'));
-                    default: return 0;
-                }
-            });
-            $cards.detach().appendTo($grid);
-        });
-
-        function filterAll() {
             const search = $('#searchInput').val().toLowerCase();
             const game = $('#filterGame').val();
             const set = $('#filterSet').val();
-            let visibleCount = 0;
-
+            let count = 0;
+            
             $('.card-item').each(function() {
                 const $el = $(this);
-                const matchesSearch = $el.data('name').toLowerCase().includes(search);
-                const matchesGame = !game || $el.data('game') === game;
-                const matchesSet = !set || $el.data('set') === set;
-
-                if (matchesSearch && matchesGame && matchesSet) {
-                    $el.show();
-                    visibleCount++;
-                } else {
-                    $el.hide();
-                }
+                const n = $el.data('name').toLowerCase();
+                const g = $el.data('game');
+                const s = $el.data('set');
+                
+                if(n.includes(search) && (!game || g===game) && (!set || s===set)) {
+                    $el.show(); count++;
+                } else $el.hide();
             });
+            $('#visibleCount').text(count);
+        });
+        
+        // --- AJAX ADD TO CART ---
+        $(document).on('click', '.ajax-cart-btn', function(e) {
+            e.preventDefault();
+            const btn = $(this);
+            const id = btn.data('card-id');
+            btn.text('...').prop('disabled', true);
+            $.get('/cart/add/' + id + '?ajax=1', function(res) {
+                $('#headerCartCount').text(res.count).show();
+                btn.removeClass('btn-primary btn-outline-primary').addClass('btn-success').text('✓');
+                setTimeout(() => btn.removeClass('btn-success').addClass('btn-primary').text('+ Quote').prop('disabled', false), 2000);
+            });
+        });
 
-            dataTable.search(search).draw();
-            dataTable.column(2).search(game ? '^'+$.fn.dataTable.util.escapeRegex(game)+'$' : '', true, false).draw();
-            dataTable.column(1).search(set ? '^'+$.fn.dataTable.util.escapeRegex(set)+'$' : '', true, false).draw();
-            
-            $('#visibleCount').text(visibleCount);
-        }
-    });
-
-    // --- API FALLBACK QUEUE (Slow/Safe) ---
-    document.addEventListener("DOMContentLoaded", function() {
+        // --- API FALLBACK FOR IMAGES ---
         const queue = Array.from(document.querySelectorAll('img.needs-fetch'));
-        const RATE_LIMIT_DELAY = 150; 
-        processNext();
-        function processNext() {
-            if (queue.length === 0) return;
+        const process = async () => {
+            if(!queue.length) return;
             const img = queue.shift();
-            // Check if wrapper is slab-wrapper or standard
-            const wrapper = img.closest('.slab-image-wrapper') || img.closest('.card-slot');
-            
-            if (wrapper) {
-                // We need the data attributes from the parent .card-item
-                const cardItem = img.closest('.card-item');
-                if(cardItem) {
-                    fetchCardImage(cardItem, img).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
-                } else { processNext(); }
-            } else { processNext(); }
-        }
-        async function fetchCardImage(card, imgEl) {
-            const game = (card.dataset.game || "").toLowerCase();
-            const name = card.dataset.name;
-            const set = (card.dataset.set || "").trim();
-
-            try {
-                if (game.includes('magic') || game.includes('mtg')) {
-                    let query = `https://api.scryfall.com/cards/search?q=name:"${encodeURIComponent(name)}"`;
-                    if (set) query += `+set:"${encodeURIComponent(set)}"`;
-                    let r = await fetch(query);
-                    if (!r.ok) r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-                    if(!r.ok) throw new Error("404");
-                    const d = await r.json();
-                    let target = d.data && d.data.length > 0 ? d.data[0] : d;
-                    if (target.image_uris) applySrc(imgEl, target.image_uris.normal);
-                    else if (target.card_faces) applySrc(imgEl, target.card_faces[0].image_uris.normal);
-                    else throw new Error("No Img");
-                } 
-                else if (game.includes('pokemon') || game.includes('pkmn')) {
-                    const cleanName = name.split('(')[0].trim();
-                    let query = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`;
-                    if (set) query += ` set.name:"${encodeURIComponent(set)}"`;
-                    let r = await fetch(query);
+            const card = img.closest('.card-item');
+            if(card) {
+                 try {
+                    const name = card.dataset.name;
+                    const set = card.dataset.set;
+                    let q = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(name.split('(')[0].trim())}"`;
+                    if(set) q += ` set.name:"${encodeURIComponent(set)}"`;
+                    
+                    let r = await fetch(q);
                     let d = await r.json();
-                    if (!d.data || d.data.length === 0) { r = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`); d = await r.json(); }
-                    if (d.data && d.data.length > 0) applySrc(imgEl, d.data[0].images.small);
-                    else throw new Error("No Img");
-                } 
-                else { loadFallback(imgEl, 'default'); }
-            } catch (error) { loadFallback(imgEl, game.includes('pokemon') ? 'pokemon' : 'default'); }
-        }
-        function applySrc(img, src) { img.src = src; }
-        function loadFallback(img, type) {
-            let backSrc = "https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg";
-            if (type === 'pokemon') backSrc = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
-            img.src = backSrc; img.style.opacity = "0.3"; 
-            img.classList.add('loaded'); // Hide loader
-            const loader = img.previousElementSibling;
-            if(loader) loader.classList.add('hidden');
-        }
+                    if(d.data && d.data.length > 0) img.src = d.data[0].images.small;
+                    else img.src = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
+                 } catch(e) { img.src = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg"; }
+                 img.onload = () => {
+                     img.classList.add('loaded');
+                     const loader = document.getElementById(img.id.replace('img','loader'));
+                     if(loader) loader.classList.add('hidden');
+                 };
+            }
+            setTimeout(process, 200);
+        };
+        process();
     });
 </script>
 {% endblock %}

@@ -1,6 +1,7 @@
 ﻿import os
 import pandas as pd
 import re
+import requests
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
@@ -63,6 +64,16 @@ class Settings(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     show_prices = db.Column(db.Boolean, default=False)
 
+class CardReference(db.Model):
+    """Local cache of all official Pokemon cards for autocomplete"""
+    id = db.Column(db.String(50), primary_key=True) # API ID (e.g. base1-4)
+    name = db.Column(db.String(150), nullable=False)
+    set_name = db.Column(db.String(100), nullable=False)
+    set_id = db.Column(db.String(50))
+    number = db.Column(db.String(20))
+    image_url = db.Column(db.String(500))
+    tcgplayer_id = db.Column(db.String(50))
+
 class Card(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -78,10 +89,13 @@ class Card(db.Model):
     variant = db.Column(db.String(100))
     location = db.Column(db.String(100))
     
-    # New Fields for Graded Cards
+    # Graded Card Fields
     grading_company = db.Column(db.String(50), nullable=True) # PSA, CGC, TAG
     grade = db.Column(db.String(20), nullable=True)           # 10, 9.5, 9
     cert_number = db.Column(db.String(100), nullable=True)    # Certification ID
+
+    # New: 1st Edition Toggle
+    is_first_edition = db.Column(db.Boolean, default=False)
 
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -98,17 +112,15 @@ class Sale(db.Model):
 with app.app_context():
     db.create_all()
     
-    # Auto-promote 'flud' logic
     admin_user = User.query.filter_by(username='flud').first()
     if admin_user and not admin_user.is_admin:
         admin_user.is_admin = True
         db.session.commit()
 
-    # Manual Migration Helper for Existing DBs
-    # This attempts to add the new columns if they don't exist.
+    # Manual Migration Helper
     try:
         with db.engine.connect() as conn:
-            # Check if columns exist by trying to select them. If fail, add them.
+            # Check for grading columns
             try:
                 conn.execute(text("SELECT grading_company FROM card LIMIT 1"))
             except:
@@ -117,6 +129,15 @@ with app.app_context():
                 conn.execute(text("ALTER TABLE card ADD COLUMN grade VARCHAR(20)"))
                 conn.execute(text("ALTER TABLE card ADD COLUMN cert_number VARCHAR(100)"))
                 conn.commit()
+            
+            # Check for 1st Edition column
+            try:
+                conn.execute(text("SELECT is_first_edition FROM card LIMIT 1"))
+            except:
+                print("Migrating DB: Adding 1st Edition column...")
+                conn.execute(text("ALTER TABLE card ADD COLUMN is_first_edition BOOLEAN DEFAULT 0"))
+                conn.commit()
+                
     except Exception as e:
         print(f"Migration Note: {e}")
 
@@ -142,7 +163,6 @@ def register():
     if request.method == 'POST':
         flash("Registration is currently disabled.")
         return redirect(url_for('login'))
-    
     flash("Registration is currently disabled.")
     return redirect(url_for('login'))
 
@@ -214,11 +234,87 @@ def api_inventory(username):
             'finish': card.finish,
             'variant': card.variant,
             'grading_company': card.grading_company,
-            'grade': card.grade
+            'grade': card.grade,
+            'is_first_edition': card.is_first_edition
         })
     return jsonify(data)
 
-# --- NEW: CART & QUOTE SYSTEM ---
+# --- NEW: AUTOCOMPLETE API & SYNC ---
+
+@app.route('/api/search_reference')
+@login_required
+def search_reference():
+    query = request.args.get('q', '').lower()
+    if len(query) < 2:
+        return jsonify([])
+    
+    # Search local DB
+    results = CardReference.query.filter(CardReference.name.ilike(f'%{query}%')).limit(20).all()
+    
+    data = []
+    for card in results:
+        data.append({
+            'name': card.name,
+            'set': card.set_name,
+            'number': card.number,
+            'image': card.image_url,
+            'label': f"{card.name} ({card.set_name}) #{card.number}"
+        })
+    return jsonify(data)
+
+@app.route('/admin/sync_db', methods=['POST'])
+@login_required
+def sync_db():
+    if not current_user.is_admin:
+        return redirect(url_for('admin'))
+    
+    try:
+        # Fetching latest sets to update local cache
+        # Note: Fetching ALL cards takes time. We will fetch page 1 of search "Charizard" as a test, 
+        # OR we can try to fetch a broad query. 
+        # For a full sync, we usually need to page through data.
+        # Here we will do a 'lite' sync of popular sets or just try to fetch as many as reasonable (limit 250 for speed demo)
+        
+        flash("Sync started... this may take a moment.")
+        
+        # We'll use a wide query to get many cards
+        api_url = "https://api.pokemontcg.io/v2/cards?pageSize=250&select=id,name,set,number,images,tcgplayer"
+        # API Key is recommended but optional for small requests.
+        
+        headers = {'User-Agent': 'FludMediaInventory/1.0'}
+        r = requests.get(api_url, headers=headers)
+        data = r.json()
+        
+        count = 0
+        if 'data' in data:
+            for item in data['data']:
+                try:
+                    c_id = item['id']
+                    exists = CardReference.query.get(c_id)
+                    if not exists:
+                        ref = CardReference(
+                            id=c_id,
+                            name=item['name'],
+                            set_name=item['set']['name'],
+                            set_id=item['set']['id'],
+                            number=item['number'],
+                            image_url=item['images']['small'] if 'images' in item else None,
+                        )
+                        db.session.add(ref)
+                        count += 1
+                except: continue
+            
+            db.session.commit()
+            flash(f"Successfully synced {count} new cards to local reference.")
+        else:
+            flash("Error connecting to Pokemon API.")
+            
+    except Exception as e:
+        flash(f"Sync Error: {e}")
+        
+    return redirect(url_for('admin'))
+
+# --- CART & QUOTE SYSTEM ---
 
 @app.route('/cart/add/<int:card_id>')
 def add_to_cart(card_id):
@@ -285,8 +381,13 @@ def submit_quote():
         cond_str = c.condition
         if c.grading_company:
             cond_str = f"{c.grading_company} {c.grade}"
-            
-        item_list += f"- 1x {c.card_name} ({c.set_name}) [{cond_str}] - {price_str}\n"
+        
+        name_line = f"- 1x {c.card_name} ({c.set_name})"
+        if c.is_first_edition:
+            name_line += " [1st Edition]"
+        name_line += f" [{cond_str}] - {price_str}\n"
+        
+        item_list += name_line
 
     try:
         admin_body = f"""
@@ -342,7 +443,9 @@ def submit_quote():
 def admin():
     settings = get_user_settings(current_user.id)
     inventory = Card.query.filter_by(user_id=current_user.id).order_by(Card.id.desc()).all()
-    return render_template('admin.html', inventory=inventory, settings=settings)
+    # Pass cache status
+    cache_count = CardReference.query.count()
+    return render_template('admin.html', inventory=inventory, settings=settings, cache_count=cache_count)
 
 @app.route('/sales')
 @login_required
@@ -398,6 +501,7 @@ def update_settings():
 def add_card():
     try:
         is_graded = request.form.get('is_graded') == 'on'
+        is_first_edition = request.form.get('is_first_edition') == 'on'
         
         grading_company = None
         grade = None
@@ -423,7 +527,8 @@ def add_card():
             location = request.form.get('location', ''),
             grading_company = grading_company,
             grade = grade,
-            cert_number = cert_number
+            cert_number = cert_number,
+            is_first_edition = is_first_edition
         )
         db.session.add(new_card)
         db.session.commit()
@@ -657,7 +762,6 @@ def update_card(id):
                 card.quantity = new_qty
             card.condition = request.form.get('condition')
             card.location = request.form.get('location')
-            # Note: Grading fields not currently in "Edit" modal, but safe to add later
         except: flash("Invalid input")
         
     db.session.commit()
