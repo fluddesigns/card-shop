@@ -271,24 +271,23 @@ def sync_db():
     try:
         flash("Sync connection initialized...")
         
-        # 1. Use a standard user-agent to avoid being blocked
-        api_url = "https://api.pokemontcg.io/v2/cards?pageSize=10&select=id,name,set,number,images,tcgplayer"
+        # CHANGED: Standard endpoint, clean User-Agent, using params dict
+        api_url = "https://api.pokemontcg.io/v2/cards"
+        params = {'pageSize': 10} 
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'User-Agent': 'FludInventory/1.0',
             'Accept': 'application/json'
         }
         
         print(f"DEBUG: Connecting to {api_url}", flush=True)
-        # CHANGED: Timeout increased to 30 seconds
-        r = requests.get(api_url, headers=headers, timeout=30)
+        r = requests.get(api_url, params=params, headers=headers, timeout=30)
         print(f"DEBUG: API Status Code: {r.status_code}", flush=True)
         
-        # 2. Check for HTTP Errors BEFORE trying to read JSON
         if r.status_code != 200:
+            print(f"DEBUG: Error Response Body: {r.text}", flush=True)
             flash(f"Sync Failed: API returned status {r.status_code}")
             return redirect(url_for('admin'))
 
-        # 3. Safe JSON decoding
         try:
             data = r.json()
         except ValueError:
@@ -320,7 +319,6 @@ def sync_db():
             flash("Sync Failed: API response missing 'data' field.")
             
     except requests.exceptions.ReadTimeout:
-        # Specific catch for slow connections
         flash("Sync Failed: Connection timed out (API was too slow). Try again later.")
     except requests.exceptions.RequestException as e:
         print(f"DEBUG: Connection Error: {e}", flush=True)
