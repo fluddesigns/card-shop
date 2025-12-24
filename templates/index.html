@@ -6,7 +6,6 @@
 <style>
     .shop-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2rem 1rem; text-align: center; border-radius: 0 0 15px 15px; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
     
-    /* Updated Badge Styling to be more button-like */
     .contact-badge { 
         padding: 8px 20px; 
         border-radius: 50px; 
@@ -27,8 +26,53 @@
     .view-toggle .btn-check:checked + .btn-outline-primary { background-color: #1e3c72; border-color: #1e3c72; color: white; }
 
     .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
+    
+    /* Standard Card Slot */
     .card-slot { border: none; border-radius: 10px; overflow: hidden; background: #2c3e50; position: relative; aspect-ratio: 2.5/3.5; transition: transform 0.2s; cursor: pointer; }
     .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); }
+    
+    /* --- NEW: GRADED SLAB STYLING --- */
+    .slab-slot {
+        background: transparent !important;
+        overflow: visible !important;
+        aspect-ratio: auto !important; /* Let height grow naturally */
+    }
+    .slab-container {
+        border-radius: 12px;
+        overflow: hidden;
+        background: #333;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        border: 4px solid #444; /* Plastic case edge */
+        position: relative;
+    }
+    .slab-header {
+        color: white;
+        padding: 5px 8px;
+        font-size: 0.7rem;
+        text-align: center;
+        border-bottom: 2px solid rgba(255,255,255,0.2);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 50px;
+    }
+    .slab-grade { font-size: 1.4rem; font-weight: 800; line-height: 1; margin-top: 2px; }
+    .slab-company { font-weight: bold; letter-spacing: 1px; text-transform: uppercase; opacity: 0.9; }
+    
+    /* Company Colors */
+    .slab-PSA .slab-header { background: linear-gradient(to bottom, #e74c3c, #c0392b); border: 1px solid #c0392b; color: white; }
+    .slab-CGC .slab-header { background: linear-gradient(to bottom, #3498db, #2980b9); color: white; }
+    .slab-TAG .slab-header { background: linear-gradient(to bottom, #2c3e50, #000); border-bottom: 1px solid #7f8c8d; }
+    .slab-BGS .slab-header { background: linear-gradient(to bottom, #f1c40f, #f39c12); color: black; }
+    .slab-SGC .slab-header { background: black; color: white; border: 1px solid #555; }
+    
+    /* Adjust image inside slab */
+    .slab-image-wrapper {
+        position: relative;
+        aspect-ratio: 2.5/3.5;
+        background: #2c3e50;
+    }
+    /* ------------------------------ */
     
     .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; transition: opacity 0.3s; opacity: 0; }
     .card-image.loaded { opacity: 1; }
@@ -38,10 +82,8 @@
     
     @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     
-    /* Price Badge (Top Right) */
     .price-badge { position: absolute; top: 8px; right: 8px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 5; pointer-events: none; }
     
-    /* Cart Action Badge (Top Left) */
     .cart-action { position: absolute; top: 8px; left: 8px; z-index: 100; }
     .btn-add-quote { font-size: 0.75rem; padding: 2px 8px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
 
@@ -65,7 +107,7 @@
 
 <div class="shop-header text-center">
     <h1 class="fw-bold">{{ owner.username|capitalize }}'s Collection</h1>
-    <p class="mb-0 opacity-75">Browse available singles.</p>
+    <p class="mb-0 opacity-75">Browse available singles & slabs.</p>
     
     <div class="d-flex justify-content-center flex-wrap gap-3 mt-4">
         <a href="https://www.m.me/fludblake" target="_blank" class="contact-badge bg-primary border border-primary">
@@ -124,6 +166,52 @@
 
     <div id="view-grid" class="binder-grid">
         {% for card in inventory %}
+        
+        {% if card.grading_company %}
+        <div class="card-slot slab-slot card-item"
+             data-game="{{ card.game }}" 
+             data-name="{{ card.card_name }}" 
+             data-set="{{ card.set_name }}"
+             data-finish="{{ card.finish }}"
+             data-condition="{{ card.condition }}"
+             data-price="{{ card.price }}">
+             
+             <div class="slab-container slab-{{ card.grading_company }}">
+                <div class="slab-header">
+                    <span class="slab-company">{{ card.grading_company }}</span>
+                    <span class="slab-grade">{{ card.grade }}</span>
+                    {% if card.cert_number %}<span style="font-size:0.6rem; opacity:0.7;">#{{ card.cert_number }}</span>{% endif %}
+                </div>
+
+                <div class="slab-image-wrapper">
+                    {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
+                    <div class="cart-action">
+                        <a href="{{ url_for('add_to_cart', card_id=card.id) }}" class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
+                    </div>
+                    {% endif %}
+
+                    {% if show_prices %}
+                    <div class="price-badge">${{ "%.2f"|format(card.price) }}</div>
+                    {% endif %}
+
+                    <div class="skeleton-loader" id="loader-{{ card.id }}"></div>
+                    <img class="card-image {% if not card.image_url %}needs-fetch{% endif %}" 
+                         id="img-{{ card.id }}"
+                         src="{{ card.image_url if card.image_url else '' }}" 
+                         alt="{{ card.card_name }}" 
+                         loading="lazy"
+                         onload="imageLoaded('{{ card.id }}')"
+                         onerror="imageFailed(this, '{{ card.id }}')">
+                </div>
+             </div>
+             
+             <div class="text-center mt-1" style="font-size: 0.75rem; color: #444; font-weight: bold; line-height: 1.2;">
+                 {{ card.card_name }}
+                 <div class="text-muted fw-normal">{{ card.set_name }}</div>
+             </div>
+        </div>
+
+        {% else %}
         <div class="card-slot card-item" 
              data-game="{{ card.game }}" 
              data-name="{{ card.card_name }}" 
@@ -157,6 +245,7 @@
                 <div class="opacity-75">{{ card.set_name }} • {{ card.condition }}</div>
             </div>
         </div>
+        {% endif %}
         {% endfor %}
     </div>
 
@@ -179,11 +268,22 @@
                     <tbody>
                         {% for card in inventory %}
                         <tr>
-                            <td class="fw-bold">{{ card.card_name }}</td>
+                            <td class="fw-bold">
+                                {{ card.card_name }}
+                                {% if card.grading_company %}
+                                <span class="badge bg-danger" style="font-size:0.7em;">{{ card.grading_company }} {{ card.grade }}</span>
+                                {% endif %}
+                            </td>
                             <td>{{ card.set_name }}</td>
                             <td>{{ card.game }}</td>
                             <td>{{ card.finish }}</td>
-                            <td><span class="badge bg-secondary">{{ card.condition }}</span></td>
+                            <td>
+                                {% if card.grading_company %}
+                                    <span class="badge bg-dark">SLAB</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ card.condition }}</span>
+                                {% endif %}
+                            </td>
                             {% if show_prices %}<td class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>{% endif %}
                             <td>{{ card.quantity }}</td>
                             <td>
@@ -224,14 +324,13 @@
     }
 
     $(document).ready(function () {
-        // --- NEW: AJAX ADD TO CART ---
+        // --- AJAX ADD TO CART ---
         $(document).on('click', '.ajax-cart-btn', function(e) {
             e.preventDefault();
             const btn = $(this);
             const cardId = btn.data('card-id');
             const originalText = btn.text();
             
-            // Visual Feedback: Adding...
             btn.prop('disabled', true).text('...');
             
             $.ajax({
@@ -239,18 +338,15 @@
                 type: 'GET',
                 data: { ajax: 1 },
                 success: function(response) {
-                    // Update Badge
                     const count = response.count;
                     const badge = $('#headerCartCount');
                     badge.text(count);
                     badge.show();
 
-                    // Visual Feedback: Success
                     btn.removeClass('btn-primary btn-outline-primary')
                        .addClass('btn-success')
                        .text('✓');
                     
-                    // Reset button after 2 seconds
                     setTimeout(function() {
                         btn.removeClass('btn-success')
                            .addClass('btn-primary')
@@ -303,7 +399,7 @@
         $('#sortGrid').on('change', function() {
             const sortType = $(this).val();
             const $grid = $('#view-grid');
-            const $cards = $grid.children('.card-slot');
+            const $cards = $grid.children('.card-item');
 
             $cards.sort(function(a, b) {
                 let valA, valB;
@@ -358,9 +454,15 @@
         function processNext() {
             if (queue.length === 0) return;
             const img = queue.shift();
-            const cardSlot = img.closest('.card-slot');
-            if (cardSlot) {
-                fetchCardImage(cardSlot, img).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
+            // Check if wrapper is slab-wrapper or standard
+            const wrapper = img.closest('.slab-image-wrapper') || img.closest('.card-slot');
+            
+            if (wrapper) {
+                // We need the data attributes from the parent .card-item
+                const cardItem = img.closest('.card-item');
+                if(cardItem) {
+                    fetchCardImage(cardItem, img).finally(() => { setTimeout(processNext, RATE_LIMIT_DELAY); });
+                } else { processNext(); }
             } else { processNext(); }
         }
         async function fetchCardImage(card, imgEl) {

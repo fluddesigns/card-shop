@@ -58,6 +58,35 @@
                             <label class="form-label">Quantity</label>
                             <input type="number" name="quantity" value="1" class="form-control">
                         </div>
+                        
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="gradedToggle" name="is_graded">
+                                <label class="form-check-label fw-bold text-primary" for="gradedToggle">Graded / Slabbed?</label>
+                            </div>
+                        </div>
+
+                        <div id="gradedFields" class="row g-3 d-none border-start border-3 border-primary ms-1 bg-light p-2 rounded">
+                            <div class="col-md-3">
+                                <label class="form-label">Grading Company</label>
+                                <select name="grading_company" class="form-select">
+                                    <option value="PSA">PSA</option>
+                                    <option value="CGC">CGC</option>
+                                    <option value="TAG">TAG</option>
+                                    <option value="BGS">Beckett (BGS)</option>
+                                    <option value="SGC">SGC</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Grade</label>
+                                <input type="text" name="grade" class="form-control" placeholder="e.g. 10, 9.5">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Cert Number</label>
+                                <input type="text" name="cert_number" class="form-control" placeholder="Optional">
+                            </div>
+                        </div>
+
                         <div class="col-12 text-end">
                             <button type="submit" class="btn btn-primary">Add Card</button>
                         </div>
@@ -197,6 +226,9 @@
                                 
                                 <td class="fw-bold text-truncate" style="max-width: 250px;">
                                     {{ card.card_name }}
+                                    {% if card.grading_company %}
+                                        <span class="badge bg-danger rounded-pill">{{ card.grading_company }} {{ card.grade }}</span>
+                                    {% endif %}
                                     {% if card.finish != 'Normal' %}
                                         <span class="badge bg-info text-dark rounded-pill" style="font-size: 0.6em;">{{ card.finish }}</span>
                                     {% endif %}
@@ -336,6 +368,23 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        
+        // --- NEW: TOGGLE GRADED FIELDS ---
+        const gradedToggle = document.getElementById('gradedToggle');
+        const gradedFields = document.getElementById('gradedFields');
+        
+        if (gradedToggle) {
+            gradedToggle.addEventListener('change', function() {
+                if(this.checked) {
+                    gradedFields.classList.remove('d-none');
+                    gradedFields.classList.add('d-flex');
+                } else {
+                    gradedFields.classList.add('d-none');
+                    gradedFields.classList.remove('d-flex');
+                }
+            });
+        }
+
         // --- DATA COLLECTION ---
         const rows = Array.from(document.querySelectorAll('.inventory-row'));
         const games = new Set();

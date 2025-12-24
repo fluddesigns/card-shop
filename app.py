@@ -8,6 +8,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_session import Session
 from flask_mail import Mail, Message
+from sqlalchemy import text
 
 app = Flask(__name__)
 
@@ -76,6 +77,12 @@ class Card(db.Model):
     image_url = db.Column(db.String(500))
     variant = db.Column(db.String(100))
     location = db.Column(db.String(100))
+    
+    # New Fields for Graded Cards
+    grading_company = db.Column(db.String(50), nullable=True) # PSA, CGC, TAG
+    grade = db.Column(db.String(20), nullable=True)           # 10, 9.5, 9
+    cert_number = db.Column(db.String(100), nullable=True)    # Certification ID
+
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Sale(db.Model):
@@ -87,13 +94,31 @@ class Sale(db.Model):
     quantity = db.Column(db.Integer, default=1)
     sale_date = db.Column(db.DateTime, default=datetime.utcnow)
 
+# --- Startup & Migration Check ---
 with app.app_context():
     db.create_all()
-    # Auto-promote 'flud' logic on startup if needed
+    
+    # Auto-promote 'flud' logic
     admin_user = User.query.filter_by(username='flud').first()
     if admin_user and not admin_user.is_admin:
         admin_user.is_admin = True
         db.session.commit()
+
+    # Manual Migration Helper for Existing DBs
+    # This attempts to add the new columns if they don't exist.
+    try:
+        with db.engine.connect() as conn:
+            # Check if columns exist by trying to select them. If fail, add them.
+            try:
+                conn.execute(text("SELECT grading_company FROM card LIMIT 1"))
+            except:
+                print("Migrating DB: Adding graded card columns...")
+                conn.execute(text("ALTER TABLE card ADD COLUMN grading_company VARCHAR(50)"))
+                conn.execute(text("ALTER TABLE card ADD COLUMN grade VARCHAR(20)"))
+                conn.execute(text("ALTER TABLE card ADD COLUMN cert_number VARCHAR(100)"))
+                conn.commit()
+    except Exception as e:
+        print(f"Migration Note: {e}")
 
 # --- Helper Functions ---
 
@@ -187,7 +212,9 @@ def api_inventory(username):
             'quantity': card.quantity,
             'condition': card.condition,
             'finish': card.finish,
-            'variant': card.variant
+            'variant': card.variant,
+            'grading_company': card.grading_company,
+            'grade': card.grade
         })
     return jsonify(data)
 
@@ -202,14 +229,12 @@ def add_to_cart(card_id):
     if card and card.quantity > 0:
         if card_id not in session['cart']:
             session['cart'].append(card_id)
-            # If standard request, use Flash. If AJAX, suppress Flash.
             if not request.args.get('ajax'):
                 flash(f"Added {card.card_name} to quote request.")
         else:
             if not request.args.get('ajax'):
                 flash("Item already in quote.")
     
-    # AJAX Response (No Reload)
     if request.args.get('ajax'):
         return jsonify({
             'status': 'success', 
@@ -217,7 +242,6 @@ def add_to_cart(card_id):
             'id': card_id
         })
     
-    # Standard Response (Reloads Page)
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/cart/remove/<int:card_id>')
@@ -230,15 +254,11 @@ def remove_from_cart(card_id):
 @app.route('/cart')
 def view_cart():
     cart_ids = session.get('cart', [])
-    
-    # Fetch card objects from DB
     cart_items = []
     est_total = 0.0
     
     if cart_ids:
-        # We fetch only valid IDs
         cart_items = Card.query.filter(Card.id.in_(cart_ids)).all()
-        # Calculate estimated total
         est_total = sum(c.price for c in cart_items if c.price)
     
     return render_template('cart.html', cart=cart_items, total=est_total)
@@ -253,21 +273,22 @@ def submit_quote():
     customer_email = request.form.get('email')
     customer_note = request.form.get('notes')
     
-    # Get card details
     cart_items = Card.query.filter(Card.id.in_(cart_ids)).all()
     
     if not cart_items:
         flash("Error: No valid items found.")
         return redirect(url_for('view_cart'))
 
-    # Build the Item List
     item_list = ""
     for c in cart_items:
         price_str = f"${c.price:.2f}" if c.price else "Check Market"
-        item_list += f"- 1x {c.card_name} ({c.set_name}) [{c.condition}] - {price_str}\n"
+        cond_str = c.condition
+        if c.grading_company:
+            cond_str = f"{c.grading_company} {c.grade}"
+            
+        item_list += f"- 1x {c.card_name} ({c.set_name}) [{cond_str}] - {price_str}\n"
 
     try:
-        # --- EMAIL 1: NOTIFICATION TO ADMIN (YOU) ---
         admin_body = f"""
         New Quote Request
         =================
@@ -288,7 +309,6 @@ def submit_quote():
         )
         mail.send(msg_admin)
 
-        # --- EMAIL 2: CONFIRMATION TO CUSTOMER (THEM) ---
         customer_body = f"""
         Hello!
         
@@ -307,7 +327,6 @@ def submit_quote():
         )
         mail.send(msg_customer)
         
-        # Clear Cart on Success
         session.pop('cart', None)
         return render_template('success.html')
         
@@ -378,6 +397,17 @@ def update_settings():
 @login_required
 def add_card():
     try:
+        is_graded = request.form.get('is_graded') == 'on'
+        
+        grading_company = None
+        grade = None
+        cert_number = None
+        
+        if is_graded:
+            grading_company = request.form.get('grading_company')
+            grade = request.form.get('grade')
+            cert_number = request.form.get('cert_number')
+
         new_card = Card(
             user_id = current_user.id,
             game = request.form.get('game'),
@@ -390,7 +420,10 @@ def add_card():
             quantity = int(request.form.get('quantity', 1)),
             image_url = request.form.get('image_url', ''),
             variant = request.form.get('variant', ''),
-            location = request.form.get('location', '')
+            location = request.form.get('location', ''),
+            grading_company = grading_company,
+            grade = grade,
+            cert_number = cert_number
         )
         db.session.add(new_card)
         db.session.commit()
@@ -509,14 +542,12 @@ def upload_csv():
             flash(f'Error: {e}')
     return redirect(url_for('admin'))
 
-# --- NEW: Bulk Actions with Discount Logic ---
 @app.route('/bulk_actions', methods=['POST'])
 @login_required
 def bulk_actions():
     card_ids = request.form.getlist('card_ids')
     action = request.form.get('action')
     
-    # Logic: Calculate discount multiplier (e.g., 10% discount -> 0.9 multiplier)
     try:
         discount_raw = request.form.get('discount', '0')
         discount_pct = float(discount_raw) if discount_raw.strip() != '' else 0.0
@@ -538,7 +569,6 @@ def bulk_actions():
                     db.session.delete(card)
                     count += 1
                 elif action == 'sell':
-                    # Calculate price with discount
                     base_price = card.price * card.quantity
                     final_price = base_price * multiplier
                     
@@ -568,7 +598,6 @@ def bulk_actions():
 
     return redirect(url_for('admin'))
 
-# --- NEW: Update Card with Discount Logic ---
 @app.route('/update_card/<int:id>', methods=['POST'])
 @login_required
 def update_card(id):
@@ -584,7 +613,6 @@ def update_card(id):
             qty_sold = int(request.form.get('sold_quantity', 1))
             total_price_input = request.form.get('sale_total')
             
-            # Logic: Discount Calculation
             discount_raw = request.form.get('discount', '0')
             discount_pct = float(discount_raw) if discount_raw.strip() != '' else 0.0
             multiplier = (100 - discount_pct) / 100
@@ -629,6 +657,7 @@ def update_card(id):
                 card.quantity = new_qty
             card.condition = request.form.get('condition')
             card.location = request.form.get('location')
+            # Note: Grading fields not currently in "Edit" modal, but safe to add later
         except: flash("Invalid input")
         
     db.session.commit()
