@@ -1,10 +1,38 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{% block title %}Card Market{% endblock %}</title>
     
+    <script>
+        (() => {
+            const getStoredTheme = () => localStorage.getItem('theme');
+            const setStoredTheme = theme => localStorage.setItem('theme', theme);
+
+            const getPreferredTheme = () => {
+                const storedTheme = getStoredTheme();
+                if (storedTheme) {
+                    return storedTheme;
+                }
+                return 'dark'; // DEFAULT IS DARK
+            };
+
+            const setTheme = theme => {
+                document.documentElement.setAttribute('data-bs-theme', theme);
+            }
+
+            setTheme(getPreferredTheme());
+
+            window.toggleTheme = function() {
+                const current = document.documentElement.getAttribute('data-bs-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                setTheme(next);
+                setStoredTheme(next);
+            }
+        })();
+    </script>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/responsive/2.4.1/css/responsive.bootstrap5.min.css" rel="stylesheet">
@@ -19,12 +47,11 @@
             border-radius: 50%;
             display: inline-block;
         }
-        .navbar-custom { background-color: #343a40; }
-        .nav-link { color: rgba(255,255,255,0.8); }
-        .nav-link:hover { color: white; }
+        /* Navbar tweaks to look good in both modes */
+        .navbar-custom { background-color: var(--bs-body-bg); border-bottom: 1px solid var(--bs-border-color); }
+        [data-bs-theme="dark"] .navbar-custom { background-color: #212529 !important; }
         
         body { 
-            background-color: #f8f9fa; 
             padding-top: 56px; 
             margin: 0;
         }
@@ -34,7 +61,7 @@
 </head>
 <body>
 
-    <nav class="navbar navbar-expand navbar-custom fixed-top navbar-dark shadow">
+    <nav class="navbar navbar-expand navbar-custom fixed-top shadow">
         <div class="container-fluid position-relative">
             <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}" title="Home">
                 <div class="pokeball-logo"></div>
@@ -57,6 +84,13 @@
 
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
+                    
+                    <li class="nav-item me-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+                            🌗
+                        </button>
+                    </li>
+
                     {% if current_user.is_authenticated %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
