@@ -204,7 +204,7 @@ def profile():
 def user_storefront(username):
     user = User.query.filter_by(username=username.lower()).first_or_404()
     settings = get_user_settings(user.id)
-    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).order_by(Card.card_name.asc()).all()
+    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).order_by(Card.price.desc()).all()
     return render_template('index.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
 
 @app.route('/u/<username>/qr')
