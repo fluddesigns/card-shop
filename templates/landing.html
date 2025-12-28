@@ -8,11 +8,14 @@
     <div class="row g-4 justify-content-center">
         {% for user in users %}
         <div class="col-md-4 col-sm-6">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                    <h3 class="text-primary">{{ user.username|capitalize }}</h3>
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center d-flex flex-column justify-content-center p-4">
+                    <h3 class="text-primary fw-bold">{{ user.username|capitalize }}</h3>
+                    
                     <div class="d-grid gap-2 mt-3">
-                        <a href="{{ url_for('user_storefront', username=user.username) }}" class="btn btn-outline-dark">Browse Inventory</a>
+                        <a href="{{ url_for('user_storefront', username=user.username) }}" class="btn btn-primary stretched-link">
+                            Browse Inventory
+                        </a>
                     </div>
                 </div>
             </div>

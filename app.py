@@ -1,19 +1,38 @@
 ﻿import os
 import pandas as pd
 import re
+import requests
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_session import Session
+from flask_mail import Mail, Message
+from sqlalchemy import text
 
 app = Flask(__name__)
 
 # --- Configuration ---
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_key')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///inventory.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///inventory.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# --- Session Config (Shopping Cart) ---
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_PERMANENT"] = False
+Session(app)
+
+# --- Email Config (SMTP2GO) ---
+app.config['MAIL_SERVER'] = os.environ.get("SMTP_HOST", "mail.smtp2go.com")
+app.config['MAIL_PORT'] = int(os.environ.get("SMTP_PORT", 2525))
+app.config['MAIL_USERNAME'] = os.environ.get("SMTP_USER")
+app.config['MAIL_PASSWORD'] = os.environ.get("SMTP_PASS")
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get("FROM_EMAIL", "sales@fludmedia.com")
+
+mail = Mail(app)
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -45,6 +64,16 @@ class Settings(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     show_prices = db.Column(db.Boolean, default=False)
 
+class CardReference(db.Model):
+    """Local cache of all official Pokemon cards for autocomplete"""
+    id = db.Column(db.String(50), primary_key=True) # API ID (e.g. base1-4)
+    name = db.Column(db.String(150), nullable=False)
+    set_name = db.Column(db.String(100), nullable=False)
+    set_id = db.Column(db.String(50))
+    number = db.Column(db.String(20))
+    image_url = db.Column(db.String(500))
+    tcgplayer_id = db.Column(db.String(50))
+
 class Card(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -59,6 +88,15 @@ class Card(db.Model):
     image_url = db.Column(db.String(500))
     variant = db.Column(db.String(100))
     location = db.Column(db.String(100))
+    
+    # Graded Card Fields
+    grading_company = db.Column(db.String(50), nullable=True) # PSA, CGC, TAG
+    grade = db.Column(db.String(20), nullable=True)           # 10, 9.5, 9
+    cert_number = db.Column(db.String(100), nullable=True)    # Certification ID
+
+    # New: 1st Edition Toggle
+    is_first_edition = db.Column(db.Boolean, default=False)
+
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Sale(db.Model):
@@ -70,13 +108,38 @@ class Sale(db.Model):
     quantity = db.Column(db.Integer, default=1)
     sale_date = db.Column(db.DateTime, default=datetime.utcnow)
 
+# --- Startup & Migration Check ---
 with app.app_context():
     db.create_all()
-    # Auto-promote 'flud' logic on startup
+    
     admin_user = User.query.filter_by(username='flud').first()
     if admin_user and not admin_user.is_admin:
         admin_user.is_admin = True
         db.session.commit()
+
+    # Manual Migration Helper
+    try:
+        with db.engine.connect() as conn:
+            # Check for grading columns
+            try:
+                conn.execute(text("SELECT grading_company FROM card LIMIT 1"))
+            except:
+                print("Migrating DB: Adding graded card columns...")
+                conn.execute(text("ALTER TABLE card ADD COLUMN grading_company VARCHAR(50)"))
+                conn.execute(text("ALTER TABLE card ADD COLUMN grade VARCHAR(20)"))
+                conn.execute(text("ALTER TABLE card ADD COLUMN cert_number VARCHAR(100)"))
+                conn.commit()
+            
+            # Check for 1st Edition column
+            try:
+                conn.execute(text("SELECT is_first_edition FROM card LIMIT 1"))
+            except:
+                print("Migrating DB: Adding 1st Edition column...")
+                conn.execute(text("ALTER TABLE card ADD COLUMN is_first_edition BOOLEAN DEFAULT 0"))
+                conn.commit()
+                
+    except Exception as e:
+        print(f"Migration Note: {e}")
 
 # --- Helper Functions ---
 
@@ -92,18 +155,14 @@ def get_user_settings(user_id):
 
 @app.route('/')
 def index():
-    # Landing page listing all active traders
     users = User.query.all()
     return render_template('landing.html', users=users)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    # LOCKED DOWN: Registration disabled per user request
     if request.method == 'POST':
         flash("Registration is currently disabled.")
         return redirect(url_for('login'))
-    
-    # If they try to visit the page manually
     flash("Registration is currently disabled.")
     return redirect(url_for('login'))
 
@@ -145,7 +204,7 @@ def profile():
 def user_storefront(username):
     user = User.query.filter_by(username=username.lower()).first_or_404()
     settings = get_user_settings(user.id)
-    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).order_by(Card.card_name.asc()).all()
+    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).order_by(Card.price.desc()).all()
     return render_template('index.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
 
 @app.route('/u/<username>/qr')
@@ -173,9 +232,241 @@ def api_inventory(username):
             'quantity': card.quantity,
             'condition': card.condition,
             'finish': card.finish,
-            'variant': card.variant
+            'variant': card.variant,
+            'grading_company': card.grading_company,
+            'grade': card.grade,
+            'is_first_edition': card.is_first_edition
         })
     return jsonify(data)
+
+# --- NEW: AUTOCOMPLETE API & SYNC ---
+
+@app.route('/api/search_reference')
+@login_required
+def search_reference():
+    query = request.args.get('q', '').lower()
+    if len(query) < 2:
+        return jsonify([])
+    
+    # Search local DB
+    results = CardReference.query.filter(CardReference.name.ilike(f'%{query}%')).limit(20).all()
+    
+    data = []
+    for card in results:
+        data.append({
+            'name': card.name,
+            'set': card.set_name,
+            'number': card.number,
+            'image': card.image_url,
+            'label': f"{card.name} ({card.set_name}) #{card.number}"
+        })
+    return jsonify(data)
+
+@app.route('/admin/sync_db', methods=['POST'])
+@login_required
+def sync_db():
+    """
+    Standard, non-hacky implementation to fetch cards from PokemonTCG.io
+    Reference: https://docs.pokemontcg.io/
+    """
+    if not current_user.is_admin:
+        return redirect(url_for('admin'))
+    
+    try:
+        flash("Sync connection initialized...")
+        
+        # 1. Official V2 Endpoint
+        api_url = "https://api.pokemontcg.io/v2/cards"
+        
+        # 2. Standard Query Parameters
+        params = {'pageSize': 10} 
+        
+        # 3. Headers: Identification & Auth
+        # Note: If you have an API key, set it in your Docker/System ENV as POKEMONTCG_IO_KEY
+        headers = {
+            'User-Agent': 'FludInventory/1.0', # Honest identification
+            'Accept': 'application/json'
+        }
+        
+        api_key = os.environ.get('POKEMONTCG_IO_KEY')
+        if api_key:
+            headers['X-Api-Key'] = api_key
+
+        print(f"DEBUG: Connecting to {api_url} with params {params}", flush=True)
+        
+        # 4. Standard Request (Verify SSL = True)
+        r = requests.get(api_url, params=params, headers=headers, timeout=30)
+        
+        print(f"DEBUG: API Status Code: {r.status_code}", flush=True)
+        
+        if r.status_code != 200:
+            print(f"DEBUG: Error Body: {r.text}", flush=True)
+            flash(f"Sync Failed: API returned status {r.status_code}. Check logs for details.")
+            return redirect(url_for('admin'))
+
+        try:
+            data = r.json()
+        except ValueError:
+            flash("Sync Failed: API returned invalid data (not JSON).")
+            return redirect(url_for('admin'))
+        
+        count = 0
+        if 'data' in data:
+            for item in data['data']:
+                try:
+                    c_id = item['id']
+                    exists = CardReference.query.get(c_id)
+                    if not exists:
+                        ref = CardReference(
+                            id=c_id,
+                            name=item['name'],
+                            set_name=item['set']['name'],
+                            set_id=item['set']['id'],
+                            number=item['number'],
+                            image_url=item['images']['small'] if 'images' in item else None,
+                        )
+                        db.session.add(ref)
+                        count += 1
+                except: continue
+            
+            db.session.commit()
+            flash(f"Success! Synced {count} new cards (Test Batch).")
+        else:
+            flash("Sync Failed: API response missing 'data' field.")
+            
+    except requests.exceptions.SSLError as e:
+        print(f"DEBUG: SSL Error: {e}", flush=True)
+        flash("SSL Error: Your server is missing root certificates. Please update your Dockerfile.")
+    except requests.exceptions.RequestException as e:
+        print(f"DEBUG: Connection Error: {e}", flush=True)
+        flash(f"Connection Error: {str(e)}")
+    except Exception as e:
+        print(f"DEBUG: General Error: {e}", flush=True)
+        flash(f"Sync Error: {str(e)}")
+        
+    return redirect(url_for('admin'))
+
+# --- CART & QUOTE SYSTEM ---
+
+@app.route('/cart/add/<int:card_id>')
+def add_to_cart(card_id):
+    if 'cart' not in session:
+        session['cart'] = []
+    
+    card = Card.query.get(card_id)
+    if card and card.quantity > 0:
+        if card_id not in session['cart']:
+            session['cart'].append(card_id)
+            if not request.args.get('ajax'):
+                flash(f"Added {card.card_name} to quote request.")
+        else:
+            if not request.args.get('ajax'):
+                flash("Item already in quote.")
+    
+    if request.args.get('ajax'):
+        return jsonify({
+            'status': 'success', 
+            'count': len(session['cart']),
+            'id': card_id
+        })
+    
+    return redirect(request.referrer or url_for('index'))
+
+@app.route('/cart/remove/<int:card_id>')
+def remove_from_cart(card_id):
+    if 'cart' in session and card_id in session['cart']:
+        session['cart'].remove(card_id)
+        flash("Item removed.")
+    return redirect(url_for('view_cart'))
+
+@app.route('/cart')
+def view_cart():
+    cart_ids = session.get('cart', [])
+    cart_items = []
+    est_total = 0.0
+    
+    if cart_ids:
+        cart_items = Card.query.filter(Card.id.in_(cart_ids)).all()
+        est_total = sum(c.price for c in cart_items if c.price)
+    
+    return render_template('cart.html', cart=cart_items, total=est_total)
+
+@app.route('/submit-quote', methods=['POST'])
+def submit_quote():
+    cart_ids = session.get('cart', [])
+    if not cart_ids:
+        flash("Cart is empty.")
+        return redirect(url_for('index'))
+
+    customer_email = request.form.get('email')
+    customer_note = request.form.get('notes')
+    
+    cart_items = Card.query.filter(Card.id.in_(cart_ids)).all()
+    
+    if not cart_items:
+        flash("Error: No valid items found.")
+        return redirect(url_for('view_cart'))
+
+    item_list = ""
+    for c in cart_items:
+        price_str = f"${c.price:.2f}" if c.price else "Check Market"
+        cond_str = c.condition
+        if c.grading_company:
+            cond_str = f"{c.grading_company} {c.grade}"
+        
+        name_line = f"- 1x {c.card_name} ({c.set_name})"
+        if c.is_first_edition:
+            name_line += " [1st Edition]"
+        name_line += f" [{cond_str}] - {price_str}\n"
+        
+        item_list += name_line
+
+    try:
+        admin_body = f"""
+        New Quote Request
+        =================
+        Customer Email: {customer_email}
+        
+        Items Requested:
+        {item_list}
+        
+        Customer Notes:
+        {customer_note}
+        """
+        
+        msg_admin = Message(
+            subject=f"TCG Quote Request: {len(cart_items)} Items",
+            recipients=[os.environ.get("ADMIN_EMAIL")], 
+            body=admin_body,
+            reply_to=customer_email
+        )
+        mail.send(msg_admin)
+
+        customer_body = f"""
+        Hello!
+        
+        We have received your request for the following cards:
+        {item_list}
+        
+        We will review availability and pricing and email you back shortly at this address.
+        
+        Thank you!
+        """
+        
+        msg_customer = Message(
+            subject="Quote Request Received - Flud Media",
+            recipients=[customer_email],
+            body=customer_body
+        )
+        mail.send(msg_customer)
+        
+        session.pop('cart', None)
+        return render_template('success.html')
+        
+    except Exception as e:
+        flash(f"Error sending email: {str(e)}")
+        return redirect(url_for('view_cart'))
+
 
 # --- ADMIN PANEL ---
 
@@ -184,7 +475,9 @@ def api_inventory(username):
 def admin():
     settings = get_user_settings(current_user.id)
     inventory = Card.query.filter_by(user_id=current_user.id).order_by(Card.id.desc()).all()
-    return render_template('admin.html', inventory=inventory, settings=settings)
+    # Pass cache status
+    cache_count = CardReference.query.count()
+    return render_template('admin.html', inventory=inventory, settings=settings, cache_count=cache_count)
 
 @app.route('/sales')
 @login_required
@@ -239,19 +532,35 @@ def update_settings():
 @login_required
 def add_card():
     try:
+        is_graded = request.form.get('is_graded') == 'on'
+        is_first_edition = request.form.get('is_first_edition') == 'on'
+        
+        grading_company = None
+        grade = None
+        cert_number = None
+        
+        if is_graded:
+            grading_company = request.form.get('grading_company')
+            grade = request.form.get('grade')
+            cert_number = request.form.get('cert_number')
+
         new_card = Card(
             user_id = current_user.id,
             game = request.form.get('game'),
             card_name = request.form.get('card_name'),
             set_name = request.form.get('set_name'),
             card_number = request.form.get('card_number'),
-            condition = request.form.get('condition'),
-            finish = request.form.get('finish'),
+            condition = request.form.get('condition', 'NM'),
+            finish = request.form.get('finish', 'Normal'),
             price = float(request.form.get('price', 0.0)),
             quantity = int(request.form.get('quantity', 1)),
             image_url = request.form.get('image_url', ''),
             variant = request.form.get('variant', ''),
-            location = request.form.get('location', '')
+            location = request.form.get('location', ''),
+            grading_company = grading_company,
+            grade = grade,
+            cert_number = cert_number,
+            is_first_edition = is_first_edition
         )
         db.session.add(new_card)
         db.session.commit()
@@ -305,55 +614,40 @@ def upload_csv():
     if file:
         try:
             df = pd.read_csv(file)
-            
-            # Map lowercase headers to actual headers
             col_map = {c.lower().strip(): c for c in df.columns}
             
             def get_val(row, candidates, default=None):
                 for cand in candidates:
                     if cand in col_map:
-                        col_name = col_map[cand]
-                        val = row[col_name]
+                        val = row[col_map[cand]]
                         return val if pd.notna(val) else default
                 return default
 
             total_qty_imported = 0
             
             for _, row in df.iterrows():
-                # --- NEW ROBUST QUANTITY LOGIC ---
-                qty = 1 # Default
-                
-                # List of potential headers, prioritized. 
-                # We prioritize "Add to Quantity" for delta imports, then "Total", then generic.
+                qty = 1
                 qty_headers = ['add to quantity', 'total quantity', 'quantity', 'qty', 'count', 'amount']
-                
                 for h in qty_headers:
                     if h in col_map:
                         raw_val = row[col_map[h]]
                         try:
-                            # Clean string inputs like "4x"
                             if isinstance(raw_val, str):
                                 clean_val = re.sub(r'[^\d]', '', raw_val)
                                 parsed = int(clean_val) if clean_val else 0
                             else:
                                 parsed = int(raw_val) if pd.notna(raw_val) else 0
-                            
-                            # If we found a valid positive number, use it and stop looking
                             if parsed > 0:
                                 qty = parsed
                                 break
-                        except:
-                            continue
-                # ---------------------------------
+                        except: continue
 
-                # Extract other fields
                 game_val = get_val(row, ['game', 'product line', 'category'], 'TCGPlayer Import')
                 set_val = get_val(row, ['set', 'set name', 'expansion'], 'Unknown')
                 name_val = get_val(row, ['name', 'card name', 'product name', 'title'], 'Unknown')
                 num_val = str(get_val(row, ['number', 'card number', 'no.'], ''))
                 cond_val = get_val(row, ['condition', 'cond'], 'NM')
                 
-                # Price parsing
                 p_raw = get_val(row, ['price', 'market price', 'tcg market price'], 0.0)
                 try:
                     price_val = float(str(p_raw).replace('$','').replace(',',''))
@@ -377,13 +671,68 @@ def upload_csv():
                     image_url=img_val,
                     location=loc_val
                 ))
-                
                 total_qty_imported += qty
                 
             db.session.commit()
             flash(f'Imported {total_qty_imported} cards')
         except Exception as e:
             flash(f'Error: {e}')
+    return redirect(url_for('admin'))
+
+@app.route('/bulk_actions', methods=['POST'])
+@login_required
+def bulk_actions():
+    card_ids = request.form.getlist('card_ids')
+    action = request.form.get('action')
+    
+    try:
+        discount_raw = request.form.get('discount', '0')
+        discount_pct = float(discount_raw) if discount_raw.strip() != '' else 0.0
+    except ValueError:
+        discount_pct = 0.0
+        
+    multiplier = (100 - discount_pct) / 100
+
+    if not card_ids:
+        flash("No cards selected.")
+        return redirect(url_for('admin'))
+
+    count = 0
+    try:
+        for c_id in card_ids:
+            card = Card.query.get(int(c_id))
+            if card and card.user_id == current_user.id:
+                if action == 'delete':
+                    db.session.delete(card)
+                    count += 1
+                elif action == 'sell':
+                    base_price = card.price * card.quantity
+                    final_price = base_price * multiplier
+                    
+                    sale = Sale(
+                        user_id=current_user.id,
+                        card_name=card.card_name,
+                        set_name=card.set_name,
+                        sale_price=final_price,
+                        quantity=card.quantity
+                    )
+                    db.session.add(sale)
+                    db.session.delete(card)
+                    count += 1
+
+        db.session.commit()
+        
+        if action == 'delete':
+            flash(f"Deleted {count} cards.")
+        elif action == 'sell':
+            msg = f"Sold {count} lots."
+            if discount_pct > 0: msg += f" Applied {discount_pct}% discount."
+            flash(msg)
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error: {str(e)}")
+
     return redirect(url_for('admin'))
 
 @app.route('/update_card/<int:id>', methods=['POST'])
@@ -401,19 +750,20 @@ def update_card(id):
             qty_sold = int(request.form.get('sold_quantity', 1))
             total_price_input = request.form.get('sale_total')
             
-            if total_price_input:
+            discount_raw = request.form.get('discount', '0')
+            discount_pct = float(discount_raw) if discount_raw.strip() != '' else 0.0
+            multiplier = (100 - discount_pct) / 100
+            
+            if total_price_input and total_price_input.strip() != '':
                 final_sale_price = float(total_price_input)
             else:
-                final_sale_price = card.price * qty_sold
+                final_sale_price = (card.price * qty_sold) * multiplier
 
             if card.quantity >= qty_sold:
                 card.quantity -= qty_sold
-                
-                # Check if empty immediately after subtracting
                 if card.quantity == 0:
                     db.session.delete(card)
 
-                # Create Sale Record
                 sale = Sale(
                     user_id=current_user.id,
                     card_name=card.card_name,
@@ -422,7 +772,10 @@ def update_card(id):
                     quantity=qty_sold
                 )
                 db.session.add(sale)
-                flash(f"Sold {qty_sold}x {card.card_name} for ${final_sale_price:.2f}")
+                
+                msg = f"Sold {qty_sold}x {card.card_name} for ${final_sale_price:.2f}"
+                if discount_pct > 0: msg += f" ({discount_pct}% off)"
+                flash(msg)
             else:
                 flash("Not enough quantity.")
         except ValueError:
@@ -434,14 +787,11 @@ def update_card(id):
     elif action == 'update_details':
         try:
             card.price = float(request.form.get('price'))
-            
-            # Check for manual 0 quantity entry
             new_qty = int(request.form.get('quantity'))
             if new_qty <= 0:
                 db.session.delete(card)
             else:
                 card.quantity = new_qty
-            
             card.condition = request.form.get('condition')
             card.location = request.form.get('location')
         except: flash("Invalid input")
