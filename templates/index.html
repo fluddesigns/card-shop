@@ -72,7 +72,7 @@
 </div>
 
 <div class="container-fluid px-3">
-    <div class="filter-bar shadow-sm">
+    <div class="filter-bar shadow-sm mt-4">
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="small fw-bold text-muted">Search</label>
@@ -158,7 +158,16 @@
         <div class="card shadow-sm">
             <div class="card-body p-0">
                 <table id="inventoryTable" class="table table-striped table-hover mb-0 w-100">
-                    <thead><tr><th>Name</th><th>Set</th><th>Game</th><th>Cond</th><th>Price</th><th>Action</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Set</th>
+                            <th>Game</th>
+                            <th>Cond</th>
+                            {% if show_prices %}<th>Price</th>{% endif %}
+                            <th>Action</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         {% for card in inventory %}
                         <tr class="card-item" data-game="{{ card.game }}" data-name="{{ card.card_name }}" data-set="{{ card.set_name }}" data-price="{{ card.price }}">
@@ -170,7 +179,11 @@
                             <td>{{ card.set_name }}</td>
                             <td>{{ card.game }}</td>
                             <td>{{ card.condition }}</td>
+                            
+                            {% if show_prices %}
                             <td class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
+                            {% endif %}
+                            
                             <td>
                                 {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
                                 <a href="#" class="btn btn-sm btn-outline-primary ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
@@ -206,7 +219,7 @@
         Array.from(games).sort().forEach(val => $('#filterGame').append(new Option(val, val)));
         Array.from(sets).sort().forEach(val => $('#filterSet').append(new Option(val, val)));
 
-        // --- FILTER & SORT LOGIC ---
+        // --- FILTER LOGIC ---
         $('#searchInput, #filterGame, #filterSet').on('keyup change', function() {
             const search = $('#searchInput').val().toLowerCase();
             const game = $('#filterGame').val();
@@ -215,7 +228,8 @@
             
             $('.card-item').each(function() {
                 const $el = $(this);
-                const n = $el.data('name').toLowerCase();
+                // Safe check for data attributes in case they are missing
+                const n = ($el.data('name') || '').toLowerCase();
                 const g = $el.data('game');
                 const s = $el.data('set');
                 
@@ -224,6 +238,40 @@
                 } else $el.hide();
             });
             $('#visibleCount').text(count);
+        });
+
+        // --- SORT LOGIC (NEW) ---
+        $('#sortGrid').on('change', function() {
+            const sortVal = $(this).val(); // e.g., 'price-desc'
+            const isPrice = sortVal.includes('price');
+            const isDesc = sortVal.includes('desc');
+
+            // Helper to sort a container
+            const runSort = (containerId, itemSelector) => {
+                const $container = $(containerId);
+                const $items = $container.find(itemSelector).get();
+
+                $items.sort(function(a, b) {
+                    let valA = isPrice ? parseFloat($(a).data('price')) : $(a).data('name').toLowerCase();
+                    let valB = isPrice ? parseFloat($(b).data('price')) : $(b).data('name').toLowerCase();
+
+                    // Handle potential NaN for prices
+                    if(isPrice) {
+                        if(isNaN(valA)) valA = 0;
+                        if(isNaN(valB)) valB = 0;
+                    }
+
+                    if (valA < valB) return isDesc ? 1 : -1;
+                    if (valA > valB) return isDesc ? -1 : 1;
+                    return 0;
+                });
+
+                $.each($items, function(idx, itm) { $container.append(itm); });
+            };
+
+            // Sort both views
+            runSort('#view-grid', '.card-slot');         // The Grid View
+            runSort('#inventoryTable tbody', 'tr');      // The List View
         });
         
         // --- AJAX ADD TO CART ---
