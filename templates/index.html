@@ -117,38 +117,45 @@
 </div>
 
 <div class="container-fluid px-3">
-    <div class="filter-bar shadow-sm mt-4">
-        <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="small fw-bold text-muted">Search</label>
-                <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search...">
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="small fw-bold text-muted">Sort</label>
-                <select id="sortGrid" class="form-select form-select-sm">
-                    <option value="price-desc" selected>Price: High</option>
-                    <option value="price-asc">Price: Low</option>
-                    <option value="name-asc">Name: A-Z</option>
-                </select>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="small fw-bold text-muted">Game</label>
-                <select id="filterGame" class="form-select form-select-sm"><option value="">All</option></select>
-            </div>
-             <div class="col-6 col-md-2">
-                <label class="small fw-bold text-muted">Set</label>
-                <select id="filterSet" class="form-select form-select-sm"><option value="">All</option></select>
-            </div>
-            <div class="col-6 col-md-3 text-end">
-                 <div class="btn-group view-toggle">
-                    <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onclick="toggleView('grid')">
-                    <label class="btn btn-sm btn-outline-primary" for="v-grid">Grid</label>
-                    <input type="radio" class="btn-check" name="viewmode" id="v-list" onclick="toggleView('list')">
-                    <label class="btn btn-sm btn-outline-primary" for="v-list">List</label>
+    
+    <button class="btn btn-outline-secondary w-100 d-md-none mt-3 mb-2" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel" aria-expanded="false">
+        🔍 Search & Filters
+    </button>
+
+    <div class="collapse d-md-block" id="filterPanel">
+        <div class="filter-bar shadow-sm mt-md-4 mt-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="small fw-bold text-muted">Search</label>
+                    <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search...">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="small fw-bold text-muted">Sort</label>
+                    <select id="sortGrid" class="form-select form-select-sm">
+                        <option value="price-desc" selected>Price: High</option>
+                        <option value="price-asc">Price: Low</option>
+                        <option value="name-asc">Name: A-Z</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="small fw-bold text-muted">Game</label>
+                    <select id="filterGame" class="form-select form-select-sm"><option value="">All</option></select>
+                </div>
+                 <div class="col-6 col-md-2">
+                    <label class="small fw-bold text-muted">Set</label>
+                    <select id="filterSet" class="form-select form-select-sm"><option value="">All</option></select>
+                </div>
+                <div class="col-6 col-md-3 text-end">
+                     <div class="btn-group view-toggle">
+                        <input type="radio" class="btn-check" name="viewmode" id="v-grid" checked onclick="toggleView('grid')">
+                        <label class="btn btn-sm btn-outline-primary" for="v-grid">Grid</label>
+                        <input type="radio" class="btn-check" name="viewmode" id="v-list" onclick="toggleView('list')">
+                        <label class="btn btn-sm btn-outline-primary" for="v-list">List</label>
+                    </div>
                 </div>
             </div>
+            <div class="mt-2 text-muted small text-end">Showing <span id="visibleCount">{{ inventory|length }}</span> cards</div>
         </div>
-        <div class="mt-2 text-muted small text-end">Showing <span id="visibleCount">{{ inventory|length }}</span> cards</div>
     </div>
 
     <div id="view-grid" class="binder-grid">
