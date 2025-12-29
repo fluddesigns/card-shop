@@ -311,45 +311,61 @@ def sync_db():
 @login_required
 def update_single_price(card_id):
     """
-    Robust price fetcher. Uses Broad Search + Fuzzy filtering to find cards 
-    even if the user's Set Name isn't perfect.
+    STRICT MODE PRICE FETCHER
+    - If Card Number is provided: Uses Strict Name + Number match. (Gold Standard)
+    - If No Number: Uses Name + Strict Set Name match.
+    - If ambiguous: FAILS safely.
     """
     card = Card.query.get_or_404(card_id)
     if card.user_id != current_user.id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
 
     try:
-        # 1. Broad Search Strategy
-        # Remove "1st Edition", parentheses, etc.
-        clean_name = card.card_name.split('(')[0].strip()
+        clean_name = re.sub(r'[^\w\s]', '', card.card_name.split('(')[0]).strip()
         
-        # Search by NAME only with a wildcard (broadest possible search)
-        query = f'name:"{clean_name}*"'
+        # 1. BUILD STRICT QUERY
+        # Using exact match operator (!) from PokemonTCG API
+        query_parts = [f'name:"{clean_name}"']
+        
+        # Priority: CARD NUMBER
+        if card.card_number and card.card_number.strip():
+            query_parts.append(f'number:"{card.card_number}"')
+        
+        query = " ".join(query_parts)
         
         api_url = "https://api.pokemontcg.io/v2/cards"
-        params = {'q': query, 'pageSize': 50} # Fetch top 50 matches
+        params = {'q': query, 'pageSize': 10} 
         headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
         
         r = requests.get(api_url, params=params, headers=headers, timeout=15, verify=False)
         data = r.json()
         
         match = None
+        candidates = data.get('data', [])
         
-        # Normalize User's Set Name (remove 'set', lowercase)
-        # e.g. "Base Set" -> "base", "Fossil" -> "fossil"
+        # 2. FILTER CANDIDATES
+        valid_matches = []
         user_set_clean = (card.set_name or "").lower().replace('set', '').strip()
         
-        if 'data' in data:
-            for candidate in data['data']:
-                api_set_clean = candidate['set']['name'].lower()
-                
-                # Loose Match: Is "base" inside "base set"?
-                if user_set_clean in api_set_clean or api_set_clean in user_set_clean:
-                    match = candidate
-                    break
-                    
-        if not match:
-             return jsonify({'success': False, 'error': f'Card found, but set "{card.set_name}" did not match any API results.'})
+        for cand in candidates:
+            # If we queried by number, we trust the result heavily
+            if card.card_number:
+                valid_matches.append(cand)
+            else:
+                # If no number, we MUST match set name reasonably well
+                api_set = cand['set']['name'].lower().replace('set', '').strip()
+                if user_set_clean == api_set:
+                     valid_matches.append(cand)
+                # Allow strict containment if unambiguous (e.g. User: "Evolutions", API: "XY - Evolutions")
+                elif user_set_clean in api_set and len(user_set_clean) > 4:
+                     valid_matches.append(cand)
+
+        if len(valid_matches) == 1:
+            match = valid_matches[0]
+        elif len(valid_matches) > 1:
+            return jsonify({'success': False, 'error': f'Ambiguous: Found {len(valid_matches)} matches (e.g. {valid_matches[0]["set"]["name"]}). Add Card Number for precision.'})
+        else:
+             return jsonify({'success': False, 'error': f'No exact match found for Name="{clean_name}" Set="{card.set_name}" Number="{card.card_number}"'})
 
         # --- Pricing Logic ---
         new_price = 0.0
@@ -363,7 +379,7 @@ def update_single_price(card_id):
             prices = match['tcgplayer']['prices']
             finish_lower = (card.finish or 'normal').lower()
             
-            # 1. Try Specific Finish
+            # Strict Finish Matching
             if 'reverse' in finish_lower:
                 new_price = get_price(prices, 'reverseHolofoil')
             elif 'holo' in finish_lower or 'foil' in finish_lower:
@@ -371,17 +387,14 @@ def update_single_price(card_id):
             elif '1st' in finish_lower:
                 new_price = get_price(prices, '1stEditionHolofoil') or get_price(prices, '1stEdition')
             
-            # 2. Fallback to Normal
-            if new_price == 0.0:
+            # Fallback to Normal ONLY if finish wasn't specified as something else
+            if new_price == 0.0 and ('normal' in finish_lower or not card.finish):
                 new_price = get_price(prices, 'normal')
             
-            # 3. Fallback to ANY price (e.g. if card is only Holo but user marked Normal)
+            # Absolute Last Resort: If the card exists but we missed the specific finish pricing,
+            # DO NOT UPDATE. (Prevent updating a Holo price with a Normal price)
             if new_price == 0.0:
-                for key in prices:
-                    p = get_price(prices, key)
-                    if p > 0:
-                        new_price = p
-                        break
+                 return jsonify({'success': False, 'error': f'Card found, but no price for finish "{card.finish}". Available: {list(prices.keys())}'})
 
         if new_price > 0:
             card.price = new_price
@@ -397,7 +410,7 @@ def update_single_price(card_id):
                 'message': f'Updated to ${new_price:.2f}'
             })
         else:
-            return jsonify({'success': False, 'error': 'Card matches, but no TCGPlayer price data available.'})
+            return jsonify({'success': False, 'error': 'No market price available.'})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
