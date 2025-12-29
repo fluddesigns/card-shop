@@ -160,11 +160,33 @@ def index():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('admin'))
+
     if request.method == 'POST':
-        flash("Registration is currently disabled.")
-        return redirect(url_for('login'))
-    flash("Registration is currently disabled.")
-    return redirect(url_for('login'))
+        username = request.form.get('username').lower()
+        password = request.form.get('password')
+        confirm = request.form.get('confirm_password')
+
+        # Basic Validation
+        if password != confirm:
+            flash("Passwords do not match.")
+            return redirect(url_for('register'))
+        
+        if User.query.filter_by(username=username).first():
+            flash("Username already exists.")
+            return redirect(url_for('register'))
+        
+        # Create User
+        new_user = User(username=username)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        
+        login_user(new_user)
+        return redirect(url_for('admin'))
+        
+    return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
