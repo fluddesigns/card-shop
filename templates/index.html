@@ -2,10 +2,17 @@
 
 {% block title %}Inventory - {{ owner.username }}{% endblock %}
 
+{% block meta %}
+<meta property="og:title" content="{{ owner.username|capitalize }}'s Card Collection">
+<meta property="og:description" content="Browse {{ inventory|length }} cards available for trade or sale.">
+<meta property="og:image" content="https://images.pokemontcg.io/swsh8/157_hires.png">
+<meta property="og:type" content="website">
+{% endblock %}
+
 {% block styles %}
 <style>
     .shop-header { 
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+        background: linear-gradient(135deg, #4b0082 0%, #1e3c72 100%); /* Adjusted purple hint for Gengar vibe */
         color: white; 
         padding: 2rem 1rem; 
         text-align: center; 
@@ -46,7 +53,7 @@
         position: relative; 
         aspect-ratio: 2.5/3.5; 
         transition: transform 0.2s; 
-        cursor: pointer;
+        cursor: zoom-in; /* Indicates clickable */
         
         /* PERFORMANCE: Skip rendering off-screen cards */
         content-visibility: auto; 
@@ -94,6 +101,22 @@
         margin-bottom: 20px; 
         border: 1px solid var(--bs-border-color); 
     }
+
+    /* Sticky Mobile Cart */
+    .mobile-sticky-cart {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: #198754; /* Success Green */
+        color: white;
+        padding: 15px;
+        text-align: center;
+        z-index: 1040;
+        box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+        display: none; /* Hidden by default via JS */
+    }
+    .mobile-sticky-cart:hover { color: white; text-decoration: none; background: #157347; }
 </style>
 {% endblock %}
 
@@ -110,7 +133,7 @@
     <p class="mb-0 opacity-75">Browse available singles & slabs.</p>
     <div class="d-flex justify-content-center flex-wrap gap-3 mt-4">
         <a href="https://www.m.me/fludblake" target="_blank" class="contact-badge bg-primary border border-primary">👋 Message Me</a>
-        <a href="{{ url_for('view_cart') }}" class="contact-badge bg-success border border-success">
+        <a href="{{ url_for('view_cart') }}" class="contact-badge bg-success border border-success d-none d-md-inline-flex">
             🛒 Quote <span id="headerCartCount" class="badge bg-danger rounded-pill ms-2" style="display: {{ 'inline-block' if session.get('cart') else 'none' }};">{{ session.get('cart')|length if session.get('cart') else 0 }}</span>
         </a>
     </div>
@@ -161,6 +184,7 @@
     <div id="view-grid" class="binder-grid">
         {% for card in inventory %}
             <div class="card-slot {% if card.grading_company %}slab-slot{% endif %} card-item"
+                 data-id="{{ card.id }}"
                  data-game="{{ card.game }}" data-name="{{ card.card_name }}" data-set="{{ card.set_name }}" data-price="{{ card.price }}">
                  
                  {% if card.grading_company %}
@@ -179,7 +203,7 @@
                         
                          {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
                         <div class="cart-action" style="top:auto; bottom:10px; right:10px; left:auto;">
-                             <a href="#" class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
+                             <button class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</button>
                         </div>
                         {% endif %}
                     </div>
@@ -193,7 +217,7 @@
                  
                  {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
                  <div class="cart-action" style="top:10px; left:10px;">
-                     <a href="#" class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
+                     <button class="btn btn-primary btn-sm btn-add-quote ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</button>
                  </div>
                  {% endif %}
                  
@@ -222,7 +246,7 @@
                     </thead>
                     <tbody>
                         {% for card in inventory %}
-                        <tr class="card-item" data-game="{{ card.game }}" data-name="{{ card.card_name }}" data-set="{{ card.set_name }}" data-price="{{ card.price }}">
+                        <tr class="card-item" data-id="{{ card.id }}" data-game="{{ card.game }}" data-name="{{ card.card_name }}" data-set="{{ card.set_name }}" data-price="{{ card.price }}">
                             <td class="fw-bold">
                                 {{ card.card_name }}
                                 {% if card.is_first_edition %}<span class="badge bg-warning text-dark border border-dark ms-1">1st Ed</span>{% endif %}
@@ -238,7 +262,7 @@
                             
                             <td>
                                 {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
-                                <a href="#" class="btn btn-sm btn-outline-primary ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</a>
+                                <button class="btn btn-sm btn-outline-primary ajax-cart-btn" data-card-id="{{ card.id }}">+ Quote</button>
                                 {% endif %}
                             </td>
                         </tr>
@@ -249,6 +273,35 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="cardModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-transparent border-0">
+            <div class="modal-body text-center p-0 position-relative">
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 z-3 bg-dark rounded-circle p-2 shadow" data-bs-dismiss="modal" aria-label="Close"></button>
+                
+                <img id="modalImage" src="" class="img-fluid rounded shadow-lg" style="max-height: 80vh; object-fit: contain;">
+                
+                <div class="mt-3 bg-dark p-3 rounded shadow text-white d-flex justify-content-between align-items-center mx-auto" style="max-width: 90%;">
+                    <div class="text-start">
+                        <div id="modalTitle" class="fw-bold"></div>
+                        <div id="modalPrice" class="text-success fw-bold"></div>
+                    </div>
+                    <div>
+                         {% if not (current_user.is_authenticated and current_user.id == owner.id) %}
+                        <button class="btn btn-success ajax-cart-btn" id="modalAddBtn" data-card-id="">+ Add to Quote</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<a href="{{ url_for('view_cart') }}" id="mobileStickyCart" class="mobile-sticky-cart fw-bold d-md-none text-decoration-none">
+    🛒 View Quote Request (<span id="mobileCartCount">{{ session.get('cart')|length if session.get('cart') else 0 }}</span>)
+</a>
+
 {% endblock %}
 
 {% block scripts %}
@@ -260,6 +313,23 @@
     }
 
     $(document).ready(function () {
+        
+        // --- STICKY CART LOGIC ---
+        function updateStickyCart(count) {
+            const countInt = parseInt(count);
+            $('#headerCartCount').text(countInt).show();
+            $('#mobileCartCount').text(countInt);
+            
+            if (countInt > 0) {
+                $('#mobileStickyCart').fadeIn();
+            } else {
+                $('#mobileStickyCart').fadeOut();
+            }
+        }
+        
+        // Initialize on Load
+        updateStickyCart('{{ session.get("cart")|length if session.get("cart") else 0 }}');
+
         // --- DATA COLLECTION FOR FILTERS ---
         const games = new Set();
         const sets = new Set();
@@ -291,7 +361,7 @@
             $('#visibleCount').text(count);
         });
 
-        // --- SORT LOGIC (UPDATED) ---
+        // --- SORT LOGIC ---
         $('#sortGrid').on('change', function() {
             const sortVal = $(this).val(); 
             const isPrice = sortVal.includes('price');
@@ -321,14 +391,60 @@
         // --- AJAX ADD TO CART ---
         $(document).on('click', '.ajax-cart-btn', function(e) {
             e.preventDefault();
+            e.stopPropagation(); // Prevent opening modal if clicking the button
+            
             const btn = $(this);
             const id = btn.data('card-id');
+            const originalText = btn.text();
+            
             btn.text('...').prop('disabled', true);
+            
             $.get('/cart/add/' + id + '?ajax=1', function(res) {
-                $('#headerCartCount').text(res.count).show();
+                // Update Sticky Cart & Header
+                updateStickyCart(res.count);
+                
                 btn.removeClass('btn-primary btn-outline-primary').addClass('btn-success').text('✓');
-                setTimeout(() => btn.removeClass('btn-success').addClass('btn-primary').text('+ Quote').prop('disabled', false), 2000);
+                setTimeout(() => btn.removeClass('btn-success').addClass('btn-primary').text(originalText).prop('disabled', false), 2000);
             });
+        });
+        
+        // --- NEW: LIGHTBOX / MODAL LOGIC ---
+        $(document).on('click', '.card-image', function() {
+            const img = $(this);
+            const cardSlot = img.closest('.card-item');
+            
+            // Get data
+            const name = cardSlot.data('name');
+            const set = cardSlot.data('set');
+            const price = cardSlot.data('price');
+            const cardId = cardSlot.data('id');
+            
+            // Populate Modal
+            $('#modalImage').attr('src', img.attr('src')); // Show small first immediately
+            $('#modalTitle').text(name + ' (' + set + ')');
+            
+            // Wire up the modal button
+            $('#modalAddBtn').data('card-id', cardId).text('+ Add to Quote');
+            
+            if(price && price > 0) {
+                $('#modalPrice').text('$' + parseFloat(price).toFixed(2)).show();
+            } else {
+                $('#modalPrice').hide();
+            }
+
+            // Show Modal
+            const myModal = new bootstrap.Modal(document.getElementById('cardModal'));
+            myModal.show();
+
+            // Attempt to fetch high-res image
+            const largeSrc = img.attr('src').replace('small', 'large');
+            const tempImg = new Image();
+            tempImg.src = largeSrc;
+            tempImg.onload = function() {
+                if($('#cardModal').hasClass('show')) {
+                   $('#modalImage').attr('src', largeSrc);
+                }
+            };
         });
 
         // --- SMART INTERSECTION OBSERVER (Lazy Loading) ---

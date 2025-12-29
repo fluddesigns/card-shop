@@ -3,6 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    {% block meta %}
+    <meta property="og:title" content="Card Market">
+    <meta property="og:description" content="Browse my local TCG inventory.">
+    <meta property="og:image" content="https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg">
+    {% endblock %}
+
     <title>{% block title %}Card Market{% endblock %}</title>
     
     <script>
@@ -54,6 +61,7 @@
         body { 
             padding-top: 56px; 
             margin: 0;
+            padding-bottom: 60px; /* Space for Sticky Cart on Mobile */
         }
         
         {% block styles %}{% endblock %}
