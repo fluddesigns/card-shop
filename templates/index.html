@@ -4,9 +4,25 @@
 
 {% block styles %}
 <style>
-    .shop-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2rem 1rem; text-align: center; border-radius: 0 0 15px 15px; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+    .shop-header { 
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+        color: white; 
+        padding: 2rem 1rem; 
+        text-align: center; 
+        border-radius: 0 0 15px 15px; 
+        margin-bottom: 2rem; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
+    }
     
-    .contact-badge { padding: 8px 20px; border-radius: 50px; display: inline-flex; align-items: center; text-decoration: none; color: white !important; font-weight: 500; }
+    .contact-badge { 
+        padding: 8px 20px; 
+        border-radius: 50px; 
+        display: inline-flex; 
+        align-items: center; 
+        text-decoration: none; 
+        color: white !important; 
+        font-weight: 500; 
+    }
     .contact-badge:hover { transform: translateY(-2px); color: white !important; }
     
     .view-toggle .btn-check:checked + .btn-outline-primary { 
@@ -15,10 +31,28 @@
         color: white; 
     }
 
-    .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
+    .binder-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
+        gap: 15px; 
+    }
     
-    /* Standard Card Slot */
-    .card-slot { border: none; border-radius: 10px; overflow: hidden; background: #2c3e50; position: relative; aspect-ratio: 2.5/3.5; transition: transform 0.2s; cursor: pointer; }
+    /* Standard Card Slot with Performance Fixes */
+    .card-slot { 
+        border: none; 
+        border-radius: 10px; 
+        overflow: hidden; 
+        background: #2c3e50; 
+        position: relative; 
+        aspect-ratio: 2.5/3.5; 
+        transition: transform 0.2s; 
+        cursor: pointer;
+        
+        /* PERFORMANCE: Skip rendering off-screen cards */
+        content-visibility: auto; 
+        contain-intrinsic-size: 1px 300px;
+    }
+
     .card-slot:hover { transform: translateY(-5px); z-index: 10; box-shadow: 0 8px 15px rgba(0,0,0,0.3); }
     
     /* Slab Styling */
@@ -43,13 +77,7 @@
     .card-image { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; opacity: 0; transition: opacity 0.3s; }
     .card-image.loaded { opacity: 1; }
     
-    .skeleton-loader { 
-        width: 100%; height: 100%; 
-        background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); 
-        background-size: 200% 100%; 
-        animation: loading 1.5s infinite; 
-        position: absolute; top: 0; left: 0; z-index: 2; 
-    }
+    .skeleton-loader { width: 100%; height: 100%; background: linear-gradient(90deg, #34495e 25%, #2c3e50 50%, #34495e 75%); background-size: 200% 100%; animation: loading 1.5s infinite; position: absolute; top: 0; left: 0; z-index: 2; }
     .skeleton-loader.hidden { display: none; }
     
     @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
@@ -58,7 +86,14 @@
     .cart-action { position: absolute; bottom: 35px; right: 8px; z-index: 100; }
     .info-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); color: white; padding: 5px; font-size: 0.75rem; text-align: center; z-index: 5; pointer-events: none; }
     
-    .filter-bar { background: var(--bs-body-bg); border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #dee2e6; }
+    /* Updated for Dark Mode Compatibility */
+    .filter-bar { 
+        background: var(--bs-body-bg); 
+        border-radius: 8px; 
+        padding: 15px; 
+        margin-bottom: 20px; 
+        border: 1px solid var(--bs-border-color); 
+    }
 </style>
 {% endblock %}
 
@@ -238,7 +273,6 @@
             
             $('.card-item').each(function() {
                 const $el = $(this);
-                // Safe check for data attributes in case they are missing
                 const n = ($el.data('name') || '').toLowerCase();
                 const g = $el.data('game');
                 const s = $el.data('set');
@@ -250,13 +284,12 @@
             $('#visibleCount').text(count);
         });
 
-        // --- SORT LOGIC (NEW) ---
+        // --- SORT LOGIC (UPDATED) ---
         $('#sortGrid').on('change', function() {
-            const sortVal = $(this).val(); // e.g., 'price-desc'
+            const sortVal = $(this).val(); 
             const isPrice = sortVal.includes('price');
             const isDesc = sortVal.includes('desc');
 
-            // Helper to sort a container
             const runSort = (containerId, itemSelector) => {
                 const $container = $(containerId);
                 const $items = $container.find(itemSelector).get();
@@ -264,24 +297,18 @@
                 $items.sort(function(a, b) {
                     let valA = isPrice ? parseFloat($(a).data('price')) : $(a).data('name').toLowerCase();
                     let valB = isPrice ? parseFloat($(b).data('price')) : $(b).data('name').toLowerCase();
-
-                    // Handle potential NaN for prices
                     if(isPrice) {
                         if(isNaN(valA)) valA = 0;
                         if(isNaN(valB)) valB = 0;
                     }
-
                     if (valA < valB) return isDesc ? 1 : -1;
                     if (valA > valB) return isDesc ? -1 : 1;
                     return 0;
                 });
-
                 $.each($items, function(idx, itm) { $container.append(itm); });
             };
-
-            // Sort both views
-            runSort('#view-grid', '.card-slot');         // The Grid View
-            runSort('#inventoryTable tbody', 'tr');      // The List View
+            runSort('#view-grid', '.card-slot');
+            runSort('#inventoryTable tbody', 'tr');
         });
         
         // --- AJAX ADD TO CART ---
@@ -297,33 +324,57 @@
             });
         });
 
-        // --- API FALLBACK FOR IMAGES ---
-        const queue = Array.from(document.querySelectorAll('img.needs-fetch'));
-        const process = async () => {
-            if(!queue.length) return;
-            const img = queue.shift();
-            const card = img.closest('.card-item');
-            if(card) {
-                 try {
-                    const name = card.dataset.name;
-                    const set = card.dataset.set;
-                    let q = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(name.split('(')[0].trim())}"`;
-                    if(set) q += ` set.name:"${encodeURIComponent(set)}"`;
-                    
-                    let r = await fetch(q);
-                    let d = await r.json();
-                    if(d.data && d.data.length > 0) img.src = d.data[0].images.small;
-                    else img.src = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
-                 } catch(e) { img.src = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg"; }
-                 img.onload = () => {
-                     img.classList.add('loaded');
-                     const loader = document.getElementById(img.id.replace('img','loader'));
-                     if(loader) loader.classList.add('hidden');
-                 };
-            }
-            setTimeout(process, 200);
+        // --- SMART INTERSECTION OBSERVER (Lazy Loading) ---
+        const observerOptions = {
+            root: null,        // use the viewport
+            rootMargin: '200px', // start loading when image is 200px away from view
+            threshold: 0.1
         };
-        process();
+
+        const cardObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    observer.unobserve(img);
+
+                    if (!img.classList.contains('needs-fetch')) {
+                        return;
+                    }
+
+                    const card = img.closest('.card-item');
+                    if (card) {
+                        const name = card.dataset.name;
+                        const set = card.dataset.set;
+                        const cleanName = name.split('(')[0].trim();
+                        
+                        let q = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cleanName)}"`;
+                        if(set) q += ` set.name:"${encodeURIComponent(set)}"`;
+
+                        fetch(q)
+                            .then(r => r.json())
+                            .then(d => {
+                                if(d.data && d.data.length > 0) {
+                                    img.src = d.data[0].images.small;
+                                } else {
+                                    img.src = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
+                                }
+                            })
+                            .catch(() => {
+                                img.src = "https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg";
+                            })
+                            .finally(() => {
+                                img.classList.add('loaded');
+                                const loader = document.getElementById(img.id.replace('img','loader'));
+                                if(loader) loader.classList.add('hidden');
+                            });
+                    }
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.card-image').forEach(img => {
+            cardObserver.observe(img);
+        });
     });
 </script>
 {% endblock %}
