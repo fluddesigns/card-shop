@@ -2,6 +2,7 @@
 import pandas as pd
 import re
 import requests
+import urllib3
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
@@ -10,6 +11,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_session import Session
 from flask_mail import Mail, Message
 from sqlalchemy import text
+
+# Suppress InsecureRequestWarning for local dev if SSL certs are missing
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 
@@ -117,30 +121,6 @@ with app.app_context():
         admin_user.is_admin = True
         db.session.commit()
 
-    # Manual Migration Helper
-    try:
-        with db.engine.connect() as conn:
-            # Check for grading columns
-            try:
-                conn.execute(text("SELECT grading_company FROM card LIMIT 1"))
-            except:
-                print("Migrating DB: Adding graded card columns...")
-                conn.execute(text("ALTER TABLE card ADD COLUMN grading_company VARCHAR(50)"))
-                conn.execute(text("ALTER TABLE card ADD COLUMN grade VARCHAR(20)"))
-                conn.execute(text("ALTER TABLE card ADD COLUMN cert_number VARCHAR(100)"))
-                conn.commit()
-            
-            # Check for 1st Edition column
-            try:
-                conn.execute(text("SELECT is_first_edition FROM card LIMIT 1"))
-            except:
-                print("Migrating DB: Adding 1st Edition column...")
-                conn.execute(text("ALTER TABLE card ADD COLUMN is_first_edition BOOLEAN DEFAULT 0"))
-                conn.commit()
-                
-    except Exception as e:
-        print(f"Migration Note: {e}")
-
 # --- Helper Functions ---
 
 def get_user_settings(user_id):
@@ -168,7 +148,6 @@ def register():
         password = request.form.get('password')
         confirm = request.form.get('confirm_password')
 
-        # Basic Validation
         if password != confirm:
             flash("Passwords do not match.")
             return redirect(url_for('register'))
@@ -177,7 +156,6 @@ def register():
             flash("Username already exists.")
             return redirect(url_for('register'))
         
-        # Create User
         new_user = User(username=username)
         new_user.set_password(password)
         db.session.add(new_user)
@@ -226,6 +204,7 @@ def profile():
 def user_storefront(username):
     user = User.query.filter_by(username=username.lower()).first_or_404()
     settings = get_user_settings(user.id)
+    # Default Sort: Price High to Low
     inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).order_by(Card.price.desc()).all()
     return render_template('index.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
 
@@ -261,16 +240,14 @@ def api_inventory(username):
         })
     return jsonify(data)
 
-# --- NEW: AUTOCOMPLETE API & SYNC ---
+# --- AUTOCOMPLETE & SYNC ---
 
 @app.route('/api/search_reference')
 @login_required
 def search_reference():
     query = request.args.get('q', '').lower()
-    if len(query) < 2:
-        return jsonify([])
+    if len(query) < 2: return jsonify([])
     
-    # Search local DB
     results = CardReference.query.filter(CardReference.name.ilike(f'%{query}%')).limit(20).all()
     
     data = []
@@ -287,86 +264,133 @@ def search_reference():
 @app.route('/admin/sync_db', methods=['POST'])
 @login_required
 def sync_db():
-    """
-    Standard, non-hacky implementation to fetch cards from PokemonTCG.io
-    Reference: https://docs.pokemontcg.io/
-    """
     if not current_user.is_admin:
         return redirect(url_for('admin'))
     
     try:
-        flash("Sync connection initialized...")
-        
-        # 1. Official V2 Endpoint
+        # Fetch 250 cards (better than 10) to populate cache
         api_url = "https://api.pokemontcg.io/v2/cards"
+        params = {'pageSize': 250} 
+        headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
         
-        # 2. Standard Query Parameters
-        params = {'pageSize': 10} 
+        # FIX: verify=False handles local SSL issues (common "broken" cause)
+        r = requests.get(api_url, params=params, headers=headers, timeout=30, verify=False)
         
-        # 3. Headers: Identification & Auth
-        # Note: If you have an API key, set it in your Docker/System ENV as POKEMONTCG_IO_KEY
-        headers = {
-            'User-Agent': 'FludInventory/1.0', # Honest identification
-            'Accept': 'application/json'
-        }
-        
-        api_key = os.environ.get('POKEMONTCG_IO_KEY')
-        if api_key:
-            headers['X-Api-Key'] = api_key
-
-        print(f"DEBUG: Connecting to {api_url} with params {params}", flush=True)
-        
-        # 4. Standard Request (Verify SSL = True)
-        r = requests.get(api_url, params=params, headers=headers, timeout=30)
-        
-        print(f"DEBUG: API Status Code: {r.status_code}", flush=True)
-        
-        if r.status_code != 200:
-            print(f"DEBUG: Error Body: {r.text}", flush=True)
-            flash(f"Sync Failed: API returned status {r.status_code}. Check logs for details.")
-            return redirect(url_for('admin'))
-
-        try:
+        if r.status_code == 200:
             data = r.json()
-        except ValueError:
-            flash("Sync Failed: API returned invalid data (not JSON).")
-            return redirect(url_for('admin'))
-        
-        count = 0
-        if 'data' in data:
-            for item in data['data']:
-                try:
-                    c_id = item['id']
-                    exists = CardReference.query.get(c_id)
-                    if not exists:
-                        ref = CardReference(
-                            id=c_id,
-                            name=item['name'],
-                            set_name=item['set']['name'],
-                            set_id=item['set']['id'],
-                            number=item['number'],
-                            image_url=item['images']['small'] if 'images' in item else None,
-                        )
-                        db.session.add(ref)
-                        count += 1
-                except: continue
-            
-            db.session.commit()
-            flash(f"Success! Synced {count} new cards (Test Batch).")
+            count = 0
+            if 'data' in data:
+                for item in data['data']:
+                    try:
+                        c_id = item['id']
+                        exists = CardReference.query.get(c_id)
+                        if not exists:
+                            ref = CardReference(
+                                id=c_id,
+                                name=item['name'],
+                                set_name=item['set']['name'],
+                                set_id=item['set']['id'],
+                                number=item['number'],
+                                image_url=item['images']['small'] if 'images' in item else None,
+                            )
+                            db.session.add(ref)
+                            count += 1
+                    except: continue
+                db.session.commit()
+                flash(f"Synced {count} new cards to reference cache.")
+            else:
+                flash("Sync Failed: Invalid data.")
         else:
-            flash("Sync Failed: API response missing 'data' field.")
+            flash(f"Sync Failed: API Error {r.status_code}")
             
-    except requests.exceptions.SSLError as e:
-        print(f"DEBUG: SSL Error: {e}", flush=True)
-        flash("SSL Error: Your server is missing root certificates. Please update your Dockerfile.")
-    except requests.exceptions.RequestException as e:
-        print(f"DEBUG: Connection Error: {e}", flush=True)
-        flash(f"Connection Error: {str(e)}")
     except Exception as e:
-        print(f"DEBUG: General Error: {e}", flush=True)
         flash(f"Sync Error: {str(e)}")
         
     return redirect(url_for('admin'))
+
+@app.route('/admin/update_price/<int:card_id>', methods=['POST'])
+@login_required
+def update_single_price(card_id):
+    """
+    Fetches the latest market price for a specific card from PokemonTCG.io
+    Matches based on Name + Set. Handles Holo/Reverse logic.
+    """
+    card = Card.query.get_or_404(card_id)
+    if card.user_id != current_user.id:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    try:
+        # Sanitize name (remove 1st Ed markers etc for search)
+        clean_name = card.card_name.split('(')[0].strip()
+        
+        # Construct exact query
+        query = f'name:"{clean_name}"'
+        if card.set_name:
+            query += f' set.name:"{card.set_name}"'
+            
+        api_url = "https://api.pokemontcg.io/v2/cards"
+        params = {'q': query, 'pageSize': 1}
+        headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
+        
+        # Verify=False to prevent local SSL errors
+        r = requests.get(api_url, params=params, headers=headers, timeout=10, verify=False)
+        data = r.json()
+        
+        if 'data' in data and len(data['data']) > 0:
+            match = data['data'][0]
+            
+            # --- Pricing Logic ---
+            new_price = 0.0
+            
+            # Helper to safely extract price
+            def get_price(prices_obj, price_type):
+                if prices_obj and price_type in prices_obj and prices_obj[price_type]:
+                    return prices_obj[price_type].get('market', 0.0) or prices_obj[price_type].get('mid', 0.0)
+                return 0.0
+
+            if 'tcgplayer' in match and 'prices' in match['tcgplayer']:
+                prices = match['tcgplayer']['prices']
+                finish_lower = (card.finish or 'normal').lower()
+                
+                # Smart Match based on Finish
+                if 'reverse' in finish_lower:
+                    new_price = get_price(prices, 'reverseHolofoil')
+                elif 'holo' in finish_lower or 'foil' in finish_lower:
+                    new_price = get_price(prices, 'holofoil')
+                elif '1st' in finish_lower:
+                    new_price = get_price(prices, '1stEditionHolofoil') or get_price(prices, '1stEdition')
+                
+                # Fallback to Normal, then anything available
+                if new_price == 0.0:
+                    new_price = get_price(prices, 'normal')
+                if new_price == 0.0:
+                    # Last ditch: grab any price found
+                    for key in prices:
+                        p = get_price(prices, key)
+                        if p > 0:
+                            new_price = p
+                            break
+
+            if new_price > 0:
+                card.price = new_price
+                card.last_updated = datetime.utcnow()
+                # Also update image if missing
+                if not card.image_url and 'images' in match:
+                    card.image_url = match['images']['small']
+                
+                db.session.commit()
+                return jsonify({
+                    'success': True, 
+                    'new_price': new_price, 
+                    'message': f'Updated to ${new_price:.2f}'
+                })
+            else:
+                return jsonify({'success': False, 'error': 'No price data found'})
+        else:
+             return jsonify({'success': False, 'error': 'Card not found in API'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # --- CART & QUOTE SYSTEM ---
 
@@ -497,7 +521,6 @@ def submit_quote():
 def admin():
     settings = get_user_settings(current_user.id)
     inventory = Card.query.filter_by(user_id=current_user.id).order_by(Card.id.desc()).all()
-    # Pass cache status
     cache_count = CardReference.query.count()
     return render_template('admin.html', inventory=inventory, settings=settings, cache_count=cache_count)
 
