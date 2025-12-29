@@ -8,13 +8,23 @@
         <h1 class="fw-bold">Inventory Management</h1>
         <div>
             <form action="{{ url_for('sync_db') }}" method="POST" class="d-inline me-2">
-                <button type="submit" class="btn btn-outline-warning" title="Fetch latest cards from PokeAPI">
-                    🔄 Sync DB <span class="badge bg-secondary rounded-pill">{{ cache_count }}</span>
+                <button type="submit" class="btn btn-outline-secondary" title="Cache cards for Autocomplete">
+                    🔄 Cache DB <span class="badge bg-secondary rounded-pill">{{ cache_count }}</span>
                 </button>
             </form>
             
+            <button onclick="updateAllPrices()" class="btn btn-warning me-2" title="Fetch latest market prices">
+                💲 Update Prices
+            </button>
+            
             <a href="{{ url_for('sales') }}" class="btn btn-outline-success me-2">💰 Sales History</a>
             <a href="{{ url_for('profile') }}" class="btn btn-outline-primary">👤 Public Profile</a>
+        </div>
+    </div>
+    
+    <div id="priceProgressContainer" class="progress mb-3 d-none" style="height: 25px;">
+        <div id="priceProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark" role="progressbar" style="width: 0%">
+            Starting Update...
         </div>
     </div>
 
@@ -93,7 +103,7 @@
                             </div>
                         </div>
 
-                        <div id="gradedFields" class="row g-3 d-none border-start border-3 border-primary ms-1 bg-body-tertiary p-2 rounded mt-2">
+                        <div id="gradedFields" class="row g-3 d-none border-start border-3 border-primary ms-1 bg-light p-2 rounded mt-2">
                             <div class="col-md-3">
                                 <label class="form-label">Company</label>
                                 <select name="grading_company" class="form-select">
@@ -173,7 +183,7 @@
     </div>
 
     <div class="card shadow-sm mb-5">
-        <div class="card-header py-3">
+        <div class="card-header bg-white py-3">
              <div class="row g-2 align-items-center">
                 <div class="col-md-4">
                     <h5 class="mb-0 fw-bold">Inventory (<span id="visibleCount">{{ inventory|length }}</span>)</h5>
@@ -198,8 +208,8 @@
         <div class="card-body p-0">
             <form method="POST" action="{{ url_for('bulk_actions') }}" id="bulkForm">
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover mb-0 align-middle">
-                        <thead>
+                    <table class="table table-striped table-hover mb-0 align-middle" id="inventoryTable">
+                        <thead class="table-light">
                             <tr>
                                 <th style="width:40px;"><input type="checkbox" class="form-check-input" id="selectAll"></th>
                                 <th>Card Name</th>
@@ -213,7 +223,7 @@
                         </thead>
                         <tbody id="inventoryBody">
                             {% for card in inventory %}
-                            <tr class="inventory-row" data-name="{{ card.card_name|lower }}" data-set="{{ card.set_name }}" data-game="{{ card.game }}" data-price="{{ card.price }}">
+                            <tr class="inventory-row" data-id="{{ card.id }}" data-name="{{ card.card_name|lower }}" data-set="{{ card.set_name }}" data-game="{{ card.game }}" data-price="{{ card.price }}">
                                 <td class="text-center"><input type="checkbox" class="form-check-input card-checkbox" name="card_ids" value="{{ card.id }}"></td>
                                 <td>
                                     <span class="fw-bold">{{ card.card_name }}</span>
@@ -227,7 +237,7 @@
                                 <td><small class="text-muted">{{ card.set_name }}</small></td>
                                 <td><small class="text-muted">{{ card.game }}</small></td>
                                 <td>{{ card.condition }}</td>
-                                <td class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
+                                <td class="price-cell text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
                                 <td>{{ card.quantity }}</td>
                                 <td>
                                     <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal{{ card.id }}">✏️</button>
@@ -285,6 +295,52 @@
 
 {% block scripts %}
 <script>
+// --- CLIENT-SIDE PRICE UPDATER ---
+async function updateAllPrices() {
+    if(!confirm("This will fetch the latest market prices for ALL cards in your view. Proceed?")) return;
+    
+    const rows = Array.from(document.querySelectorAll('.inventory-row'));
+    if(rows.length === 0) return;
+    
+    const container = document.getElementById('priceProgressContainer');
+    const bar = document.getElementById('priceProgressBar');
+    container.classList.remove('d-none');
+    
+    let processed = 0;
+    let successCount = 0;
+    
+    // Process sequentially to avoid API rate limits
+    for (const row of rows) {
+        const id = row.dataset.id;
+        const name = row.dataset.name;
+        
+        try {
+            const res = await fetch(`/admin/update_price/${id}`, { method: 'POST' });
+            const data = await res.json();
+            
+            if(data.success) {
+                const priceCell = row.querySelector('.price-cell');
+                priceCell.innerHTML = `$${data.new_price.toFixed(2)}`;
+                priceCell.classList.add('bg-success', 'text-white'); // Visual flash
+                setTimeout(() => priceCell.classList.remove('bg-success', 'text-white'), 1000);
+                successCount++;
+            }
+        } catch(e) {
+            console.error("Failed to update", name, e);
+        }
+        
+        processed++;
+        const pct = Math.round((processed / rows.length) * 100);
+        bar.style.width = pct + "%";
+        bar.innerText = `${processed} / ${rows.length}`;
+    }
+    
+    setTimeout(() => {
+        alert(`Update Complete! Updated ${successCount} cards.`);
+        container.classList.add('d-none');
+    }, 500);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     
     // --- LIVE SEARCH LOGIC ---
