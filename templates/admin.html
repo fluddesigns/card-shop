@@ -217,7 +217,7 @@
                                 <th>Game</th>
                                 <th>Cond</th>
                                 <th>Price</th>
-                                <th>Qty</th>
+                                <th>Updated</th> <th>Qty</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -238,6 +238,9 @@
                                 <td><small class="text-muted">{{ card.game }}</small></td>
                                 <td>{{ card.condition }}</td>
                                 <td class="price-cell text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
+                                <td class="date-cell text-muted small">
+                                    {{ card.last_updated.strftime('%m-%d') if card.last_updated else '-' }}
+                                </td>
                                 <td>{{ card.quantity }}</td>
                                 <td>
                                     <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal{{ card.id }}">✏️</button>
@@ -297,9 +300,16 @@
 <script>
 // --- CLIENT-SIDE PRICE UPDATER ---
 async function updateAllPrices() {
-    if(!confirm("This will fetch the latest market prices for ALL cards in your view. Proceed?")) return;
+    // Only ask for confirmation if the user isn't filtering
+    const searchVal = document.getElementById('adminSearch').value;
+    const msg = searchVal 
+        ? "Update prices for currently filtered cards?" 
+        : "This will fetch latest prices for ALL cards. Proceed?";
+        
+    if(!confirm(msg)) return;
     
-    const rows = Array.from(document.querySelectorAll('.inventory-row'));
+    // Only target visible rows
+    const rows = Array.from(document.querySelectorAll('.inventory-row')).filter(r => r.style.display !== 'none');
     if(rows.length === 0) return;
     
     const container = document.getElementById('priceProgressContainer');
@@ -309,7 +319,6 @@ async function updateAllPrices() {
     let processed = 0;
     let successCount = 0;
     
-    // Process sequentially to avoid API rate limits
     for (const row of rows) {
         const id = row.dataset.id;
         const name = row.dataset.name;
@@ -319,9 +328,19 @@ async function updateAllPrices() {
             const data = await res.json();
             
             if(data.success) {
+                // Update Price Display
                 const priceCell = row.querySelector('.price-cell');
                 priceCell.innerHTML = `$${data.new_price.toFixed(2)}`;
-                priceCell.classList.add('bg-success', 'text-white'); // Visual flash
+                priceCell.classList.add('bg-success', 'text-white');
+                
+                // Update Date Display
+                const dateCell = row.querySelector('.date-cell');
+                const today = new Date();
+                const m = String(today.getMonth() + 1).padStart(2, '0');
+                const d = String(today.getDate()).padStart(2, '0');
+                dateCell.innerText = `${m}-${d}`;
+                dateCell.classList.add('fw-bold', 'text-dark');
+                
                 setTimeout(() => priceCell.classList.remove('bg-success', 'text-white'), 1000);
                 successCount++;
             }
@@ -392,7 +411,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 300);
         });
 
-        // Hide dropdown when clicking outside
         document.addEventListener('click', function(e) {
             if (e.target !== searchInput && e.target !== resultsDiv) {
                 resultsDiv.style.display = 'none';
@@ -415,8 +433,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- STANDARD TABLE FILTERING (Existing Logic) ---
-    // (Preserved from previous versions for basic filtering)
+    // --- STANDARD TABLE FILTERING ---
     const rows = Array.from(document.querySelectorAll('.inventory-row'));
     const adminSearch = document.getElementById('adminSearch');
     
