@@ -12,7 +12,7 @@
 {% block styles %}
 <style>
     .shop-header { 
-        background: linear-gradient(135deg, #4b0082 0%, #1e3c72 100%); /* Adjusted purple hint for Gengar vibe */
+        background: linear-gradient(135deg, #4b0082 0%, #1e3c72 100%); 
         color: white; 
         padding: 2rem 1rem; 
         text-align: center; 
@@ -53,7 +53,8 @@
         position: relative; 
         aspect-ratio: 2.5/3.5; 
         transition: transform 0.2s; 
-        cursor: zoom-in; /* Indicates clickable */
+        /* FIX: 'pointer' is more reliable on mobile than 'zoom-in' for tap events */
+        cursor: pointer;
         
         /* PERFORMANCE: Skip rendering off-screen cards */
         content-visibility: auto; 
@@ -278,7 +279,7 @@
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content bg-transparent border-0">
             <div class="modal-body text-center p-0 position-relative">
-                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 z-3 bg-dark rounded-circle p-2 shadow" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 z-3 bg-dark rounded-circle p-2 shadow fs-4" data-bs-dismiss="modal" aria-label="Close"></button>
                 
                 <img id="modalImage" src="" class="img-fluid rounded shadow-lg" style="max-height: 80vh; object-fit: contain;">
                 
@@ -408,10 +409,17 @@
             });
         });
         
-        // --- NEW: LIGHTBOX / MODAL LOGIC ---
-        $(document).on('click', '.card-image', function() {
-            const img = $(this);
-            const cardSlot = img.closest('.card-item');
+        // --- NEW: LIGHTBOX / MODAL LOGIC (MOBILE FIX) ---
+        // FIX: Listen to '.card-slot' (the container) instead of '.card-image'.
+        // This fixes mobile taps where layers (buttons, badges) might block the image.
+        $(document).on('click', '.card-slot', function(e) {
+            // Safety: If the user actually clicked a button (or inside one), do nothing.
+            if ($(e.target).closest('.ajax-cart-btn, a').length) {
+                return; 
+            }
+
+            const cardSlot = $(this);
+            const img = cardSlot.find('.card-image'); // Find the image INSIDE the slot
             
             // Get data
             const name = cardSlot.data('name');
@@ -420,7 +428,7 @@
             const cardId = cardSlot.data('id');
             
             // Populate Modal
-            $('#modalImage').attr('src', img.attr('src')); // Show small first immediately
+            $('#modalImage').attr('src', img.attr('src')); 
             $('#modalTitle').text(name + ' (' + set + ')');
             
             // Wire up the modal button
