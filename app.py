@@ -268,12 +268,11 @@ def sync_db():
         return redirect(url_for('admin'))
     
     try:
-        # Fetch 250 cards (better than 10) to populate cache
+        # Fetch 250 cards to populate cache
         api_url = "https://api.pokemontcg.io/v2/cards"
         params = {'pageSize': 250} 
         headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
         
-        # FIX: verify=False handles local SSL issues (common "broken" cause)
         r = requests.get(api_url, params=params, headers=headers, timeout=30, verify=False)
         
         if r.status_code == 200:
@@ -312,82 +311,93 @@ def sync_db():
 @login_required
 def update_single_price(card_id):
     """
-    Fetches the latest market price for a specific card from PokemonTCG.io
-    Matches based on Name + Set. Handles Holo/Reverse logic.
+    Robust price fetcher. Uses Broad Search + Fuzzy filtering to find cards 
+    even if the user's Set Name isn't perfect.
     """
     card = Card.query.get_or_404(card_id)
     if card.user_id != current_user.id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
 
     try:
-        # Sanitize name (remove 1st Ed markers etc for search)
+        # 1. Broad Search Strategy
+        # Remove "1st Edition", parentheses, etc.
         clean_name = card.card_name.split('(')[0].strip()
         
-        # Construct exact query
-        query = f'name:"{clean_name}"'
-        if card.set_name:
-            query += f' set.name:"{card.set_name}"'
-            
+        # Search by NAME only with a wildcard (broadest possible search)
+        query = f'name:"{clean_name}*"'
+        
         api_url = "https://api.pokemontcg.io/v2/cards"
-        params = {'q': query, 'pageSize': 1}
+        params = {'q': query, 'pageSize': 50} # Fetch top 50 matches
         headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
         
-        # Verify=False to prevent local SSL errors
-        r = requests.get(api_url, params=params, headers=headers, timeout=10, verify=False)
+        r = requests.get(api_url, params=params, headers=headers, timeout=15, verify=False)
         data = r.json()
         
-        if 'data' in data and len(data['data']) > 0:
-            match = data['data'][0]
-            
-            # --- Pricing Logic ---
-            new_price = 0.0
-            
-            # Helper to safely extract price
-            def get_price(prices_obj, price_type):
-                if prices_obj and price_type in prices_obj and prices_obj[price_type]:
-                    return prices_obj[price_type].get('market', 0.0) or prices_obj[price_type].get('mid', 0.0)
-                return 0.0
+        match = None
+        
+        # Normalize User's Set Name (remove 'set', lowercase)
+        # e.g. "Base Set" -> "base", "Fossil" -> "fossil"
+        user_set_clean = (card.set_name or "").lower().replace('set', '').strip()
+        
+        if 'data' in data:
+            for candidate in data['data']:
+                api_set_clean = candidate['set']['name'].lower()
+                
+                # Loose Match: Is "base" inside "base set"?
+                if user_set_clean in api_set_clean or api_set_clean in user_set_clean:
+                    match = candidate
+                    break
+                    
+        if not match:
+             return jsonify({'success': False, 'error': f'Card found, but set "{card.set_name}" did not match any API results.'})
 
-            if 'tcgplayer' in match and 'prices' in match['tcgplayer']:
-                prices = match['tcgplayer']['prices']
-                finish_lower = (card.finish or 'normal').lower()
-                
-                # Smart Match based on Finish
-                if 'reverse' in finish_lower:
-                    new_price = get_price(prices, 'reverseHolofoil')
-                elif 'holo' in finish_lower or 'foil' in finish_lower:
-                    new_price = get_price(prices, 'holofoil')
-                elif '1st' in finish_lower:
-                    new_price = get_price(prices, '1stEditionHolofoil') or get_price(prices, '1stEdition')
-                
-                # Fallback to Normal, then anything available
-                if new_price == 0.0:
-                    new_price = get_price(prices, 'normal')
-                if new_price == 0.0:
-                    # Last ditch: grab any price found
-                    for key in prices:
-                        p = get_price(prices, key)
-                        if p > 0:
-                            new_price = p
-                            break
+        # --- Pricing Logic ---
+        new_price = 0.0
+        
+        def get_price(prices_obj, price_type):
+            if prices_obj and price_type in prices_obj and prices_obj[price_type]:
+                return prices_obj[price_type].get('market', 0.0) or prices_obj[price_type].get('mid', 0.0)
+            return 0.0
 
-            if new_price > 0:
-                card.price = new_price
-                card.last_updated = datetime.utcnow()
-                # Also update image if missing
-                if not card.image_url and 'images' in match:
-                    card.image_url = match['images']['small']
-                
-                db.session.commit()
-                return jsonify({
-                    'success': True, 
-                    'new_price': new_price, 
-                    'message': f'Updated to ${new_price:.2f}'
-                })
-            else:
-                return jsonify({'success': False, 'error': 'No price data found'})
+        if 'tcgplayer' in match and 'prices' in match['tcgplayer']:
+            prices = match['tcgplayer']['prices']
+            finish_lower = (card.finish or 'normal').lower()
+            
+            # 1. Try Specific Finish
+            if 'reverse' in finish_lower:
+                new_price = get_price(prices, 'reverseHolofoil')
+            elif 'holo' in finish_lower or 'foil' in finish_lower:
+                new_price = get_price(prices, 'holofoil')
+            elif '1st' in finish_lower:
+                new_price = get_price(prices, '1stEditionHolofoil') or get_price(prices, '1stEdition')
+            
+            # 2. Fallback to Normal
+            if new_price == 0.0:
+                new_price = get_price(prices, 'normal')
+            
+            # 3. Fallback to ANY price (e.g. if card is only Holo but user marked Normal)
+            if new_price == 0.0:
+                for key in prices:
+                    p = get_price(prices, key)
+                    if p > 0:
+                        new_price = p
+                        break
+
+        if new_price > 0:
+            card.price = new_price
+            card.last_updated = datetime.utcnow()
+            # Update image if missing
+            if not card.image_url and 'images' in match:
+                card.image_url = match['images']['small']
+            
+            db.session.commit()
+            return jsonify({
+                'success': True, 
+                'new_price': new_price, 
+                'message': f'Updated to ${new_price:.2f}'
+            })
         else:
-             return jsonify({'success': False, 'error': 'Card not found in API'})
+            return jsonify({'success': False, 'error': 'Card matches, but no TCGPlayer price data available.'})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
