@@ -298,7 +298,9 @@ def sync_db():
                             )
                             db.session.add(ref)
                             count += 1
-                    except: continue
+                    except Exception as e:
+                        print(f"CRASH ON CARD {item.get('id')}: {str(e)}", flush=True)
+                        continue
                 db.session.commit()
                 flash(f"Synced {count} new cards to reference cache.")
             else:
