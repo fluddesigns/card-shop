@@ -909,44 +909,30 @@ def pokedex_hub():
     
     for t in trackers:
         species = t.species_name
-        
-        # 1. Get all master cards for the species
         master_cards = CardReference.query.filter(CardReference.name.ilike(f"%{species}%")).all()
         
-        # 2. THE FIX: Calculate TOTAL variants (count the pills, not the cards)
-        total_variant_count = 0
-        ref_ids = []
+        total_targets = 0
+        owned_count = 0
+        
         for ref in master_cards:
-            ref_ids.append(ref.id)
-            if ref.available_finishes:
-                # Count how many finishes are separated by commas
-                total_variant_count += len(ref.available_finishes.split(','))
-            else:
-                total_variant_count += 1
-        
-        # 3. THE FIX: Calculate OWNED variants 
-        # (Match distinct combinations of reference_id + finish)
-        owned_cards = Card.query.filter(
-            Card.user_id == current_user.id,
-            Card.reference_id.in_(ref_ids)
-        ).all()
-        
-        # We use a Python 'set' to automatically prevent duplicate counts
-        # if you own 3 copies of the exact same Reverse Holo.
-        owned_unique = set()
-        for oc in owned_cards:
-            owned_unique.add((oc.reference_id, oc.finish.lower()))
+            finishes = ref.available_finishes.split(',') if ref.available_finishes else ["Normal"]
             
-        owned_count = len(owned_unique)
+            # THE COLLECTOR FIX: Treat every finish as a distinct "Slot"
+            for f in finishes:
+                total_targets += 1
+                
+                # Check if user owns THIS specific finish for THIS card
+                is_owned = Card.query.filter_by(
+                    user_id=current_user.id,
+                    reference_id=ref.id,
+                    finish=f # Matches "1st Edition", "Reverse Holofoil", etc.
+                ).first()
+                
+                if is_owned:
+                    owned_count += 1
         
-        pct = int((owned_count / total_variant_count) * 100) if total_variant_count > 0 else 0
-        
-        stats.append({
-            'name': species,
-            'total': total_variant_count,
-            'owned': owned_count,
-            'percent': pct
-        })
+        pct = int((owned_count / total_targets) * 100) if total_targets > 0 else 0
+        stats.append({'name': species, 'total': total_targets, 'owned': owned_count, 'percent': pct})
         
     return render_template('pokedex.html', stats=stats)
 
