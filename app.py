@@ -952,6 +952,26 @@ def toggle_favorite():
         
     return redirect(url_for('pokedex_hub'))
 
+@app.route('/api/force_variant', methods=['POST'])
+@login_required
+def force_variant():
+    ref_id = request.form.get('reference_id')
+    new_finish = request.form.get('new_finish')
+    
+    card_ref = CardReference.query.get(ref_id)
+    if card_ref and new_finish:
+        current_finishes = card_ref.available_finishes.split(',') if card_ref.available_finishes else []
+        
+        if new_finish not in current_finishes:
+            current_finishes.append(new_finish)
+            card_ref.available_finishes = ",".join(current_finishes)
+            db.session.commit()
+            flash(f"✅ Successfully forced '{new_finish}' variant onto {card_ref.name}!")
+        else:
+            flash(f"⚠️ {card_ref.name} already has {new_finish} tracked.")
+            
+    return redirect(request.referrer or url_for('pokedex_hub'))
+
 @app.route('/pokedex/<species>')
 @login_required
 def pokedex_binder(species):
