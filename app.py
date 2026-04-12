@@ -616,26 +616,37 @@ def add_card():
         is_graded = request.form.get('is_graded') == 'on'
         is_first_edition = request.form.get('is_first_edition') == 'on'
         
-        grading_company = None
-        grade = None
-        cert_number = None
+        grading_company = request.form.get('grading_company') if is_graded else None
+        grade = request.form.get('grade') if is_graded else None
+        cert_number = request.form.get('cert_number') if is_graded else None
+
+        # --- THE FIX: Safely parse empty strings into numbers ---
+        price_raw = request.form.get('price')
+        price_val = float(price_raw) if price_raw and price_raw.strip() != '' else 0.0
         
-        if is_graded:
-            grading_company = request.form.get('grading_company')
-            grade = request.form.get('grade')
-            cert_number = request.form.get('cert_number')
+        qty_raw = request.form.get('quantity')
+        qty_val = int(qty_raw) if qty_raw and qty_raw.strip() != '' else 1
+        
+        # --- NEW: Auto-link to the Pokedex Dictionary on creation ---
+        card_name = request.form.get('card_name')
+        set_name = request.form.get('set_name')
+        card_number = request.form.get('card_number')
+        
+        ref_match = CardReference.query.filter_by(name=card_name, set_name=set_name).first()
+        ref_id = ref_match.id if ref_match else None
 
         new_card = Card(
             user_id = current_user.id,
-            status = request.form.get('status', 'Personal'), # NEW: Grabs the dropdown choice
+            status = request.form.get('status', 'Personal'),
+            reference_id = ref_id,  # Instantly linked!
             game = request.form.get('game'),
-            card_name = request.form.get('card_name'),
-            set_name = request.form.get('set_name'),
-            card_number = request.form.get('card_number'),
+            card_name = card_name,
+            set_name = set_name,
+            card_number = card_number,
             condition = request.form.get('condition', 'NM'),
             finish = request.form.get('finish', 'Normal'),
-            price = float(request.form.get('price', 0.0)),
-            quantity = int(request.form.get('quantity', 1)),
+            price = price_val,
+            quantity = qty_val,
             image_url = request.form.get('image_url', ''),
             variant = request.form.get('variant', ''),
             location = request.form.get('location', ''),
