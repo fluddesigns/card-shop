@@ -892,5 +892,61 @@ def update_card(id):
     db.session.commit()
     return redirect(url_for('admin'))
 
+# --- POKEDEX & HUNT MODE ---
+
+@app.route('/pokedex')
+@login_required
+def pokedex_hub():
+    # 1. Get a unique list of favorited species names
+    fav_records = CardReference.query.filter_by(is_favorite=True).all()
+    fav_species = sorted(list(set([c.name for c in fav_records])))
+    
+    stats = []
+    for species in fav_species:
+        # Total printed variants in the official dictionary
+        total_refs = CardReference.query.filter_by(name=species).all()
+        total_count = len(total_refs)
+        
+        # Owned variants (distinct reference_ids owned by the user)
+        ref_ids = [r.id for r in total_refs]
+        owned_count = db.session.query(Card.reference_id).filter(
+            Card.user_id == current_user.id,
+            Card.reference_id.in_(ref_ids)
+        ).distinct().count()
+        
+        pct = int((owned_count / total_count) * 100) if total_count > 0 else 0
+        
+        stats.append({
+            'name': species,
+            'total': total_count,
+            'owned': owned_count,
+            'percent': pct
+        })
+        
+    return render_template('pokedex.html', stats=stats)
+
+@app.route('/api/toggle_favorite', methods=['POST'])
+@login_required
+def toggle_favorite():
+    species_name = request.form.get('species_name').strip()
+    if not species_name:
+        return redirect(url_for('pokedex_hub'))
+        
+    # Find all dictionary entries with this exact name
+    cards = CardReference.query.filter(CardReference.name.ilike(species_name)).all()
+    if not cards:
+        flash(f"Could not find '{species_name}' in the dictionary. Check your spelling!")
+        return redirect(url_for('pokedex_hub'))
+        
+    # Toggle the boolean
+    new_status = not cards[0].is_favorite
+    for c in cards:
+        c.is_favorite = new_status
+        
+    db.session.commit()
+    action = "Added" if new_status else "Removed"
+    flash(f"{action} {species_name.capitalize()} to your Master Set targets!")
+    return redirect(url_for('pokedex_hub'))
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
