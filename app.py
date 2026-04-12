@@ -80,11 +80,18 @@ class CardReference(db.Model):
     image_url = db.Column(db.String(500))
     tcgplayer_id = db.Column(db.String(50))
 
+    # NEW: Phase 1 - Track if this is a species you are actively chasing
+    is_favorite = db.Column(db.Boolean, default=False)
+
 class Card(db.Model):
     # New: Inventory Segregation
     status = db.Column(db.String(20), default='Personal', nullable=False)
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    # NEW: Phase 1 - Link your inventory to the master dictionary
+    reference_id = db.Column(db.String(50), nullable=True)
+                             
     game = db.Column(db.String(50), nullable=False)
     set_name = db.Column(db.String(100), nullable=False)
     card_name = db.Column(db.String(150), nullable=False)
