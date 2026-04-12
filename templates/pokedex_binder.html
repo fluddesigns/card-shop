@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ species }} - Pokedex{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="{{ url_for('pokedex_hub') }}" class="text-decoration-none text-muted mb-1 d-block">&larr; Back to Hub</a>
+            <h1 class="fw-bold mb-0">📕 {{ species }} Collection</h1>
+        </div>
+        <button class="btn btn-danger btn-lg fw-bold shadow-sm">🎯 HUNT MODE</button>
+    </div>
+
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-4">
+        {% for ref in master_cards %}
+            {% set is_owned = ref.id in owned_dict %}
+            
+            <div class="col">
+                <div class="card h-100 border-0 shadow-sm bg-dark text-white {% if not is_owned %}opacity-75{% endif %}">
+                    
+                    <div style="position: relative;">
+                        <img src="{{ ref.image_url }}" 
+                             class="card-img-top p-2" 
+                             alt="{{ ref.name }}"
+                             style="{% if not is_owned %}filter: grayscale(100%);{% endif %} border-radius: 15px;">
+                        
+                        {% if not is_owned %}
+                            <span class="badge bg-danger position-absolute top-50 start-50 translate-middle fs-5 opacity-100 shadow">
+                                MISSING
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="card-body text-center pt-1">
+                        <p class="text-muted small mb-1 fw-bold">{{ ref.set_name }} (#{{ ref.number }})</p>
+                        
+                        <div class="d-flex flex-wrap justify-content-center gap-1 mt-2">
+                            {% if is_owned %}
+                                {% for owned_card in owned_dict[ref.id] %}
+                                    <span class="badge {% if owned_card.finish == 'Reverse Holofoil' %}bg-info text-dark{% elif owned_card.finish == 'Holofoil' %}bg-warning text-dark{% else %}bg-secondary{% endif %}" 
+                                          data-bs-toggle="tooltip" 
+                                          title="Condition: {{ owned_card.condition }} | Notes: {{ owned_card.notes or 'None' }}">
+                                        {{ owned_card.finish }} 
+                                        {% if owned_card.is_graded %}
+                                            ({{ owned_card.grade }})
+                                        {% endif %}
+                                    </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="badge bg-dark border border-secondary text-secondary">Awaiting Capture</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function(){
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+    });
+</script>
+{% endblock %}

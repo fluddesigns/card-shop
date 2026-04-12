@@ -948,5 +948,45 @@ def toggle_favorite():
     flash(f"{action} {species_name.capitalize()} to your Master Set targets!")
     return redirect(url_for('pokedex_hub'))
 
+@app.route('/pokedex/<species>')
+@login_required
+def pokedex_binder(species):
+    # 1. Verify this is a tracked species
+    ref_check = CardReference.query.filter(
+        CardReference.name.ilike(species), 
+        CardReference.is_favorite == True
+    ).first()
+    
+    if not ref_check:
+        flash(f"You are not tracking {species} yet. Add it to your favorites first!")
+        return redirect(url_for('pokedex_hub'))
+
+    # 2. Grab the Master Dictionary for this species (Grouped by Set/Artwork)
+    master_cards = CardReference.query.filter(
+        CardReference.name.ilike(species)
+    ).order_by(CardReference.release_date.desc()).all()
+
+    # 3. Grab the User's Owned Inventory for this species
+    ref_ids = [c.id for c in master_cards]
+    owned_cards = Card.query.filter(
+        Card.user_id == current_user.id,
+        Card.reference_id.in_(ref_ids)
+    ).all()
+
+    # 4. Organize owned cards into a dictionary mapped to the reference_id
+    # Format: { 'base1-4': [CardObj(Normal), CardObj(Reverse Holo)], ... }
+    owned_dict = {}
+    for oc in owned_cards:
+        if oc.reference_id not in owned_dict:
+            owned_dict[oc.reference_id] = []
+        owned_dict[oc.reference_id].append(oc)
+
+    return render_template(
+        'pokedex_binder.html', 
+        species=species.capitalize(), 
+        master_cards=master_cards, 
+        owned_dict=owned_dict
+    )
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
