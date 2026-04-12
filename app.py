@@ -85,8 +85,8 @@ class CardReference(db.Model):
     # NEW: Phase 1.5 - Track all available finishes for this card
     available_finishes = db.Column(db.String(255), default="Normal")
 
-    class MasterTracker(db.Model):
-        """Tracks the umbrella species you are hunting (e.g. 'Meowth') to group all wildcards."""
+class MasterTracker(db.Model):
+    """Tracks the umbrella species you are hunting (e.g. 'Meowth') to group all wildcards."""
     id = db.Column(db.Integer, primary_key=True)
     species_name = db.Column(db.String(50), unique=True, nullable=False)
 
