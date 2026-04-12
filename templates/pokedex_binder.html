@@ -35,19 +35,32 @@
                         <p class="text-muted small mb-1 fw-bold">{{ ref.set_name }} (#{{ ref.number }})</p>
                         
                         <div class="d-flex flex-wrap justify-content-center gap-1 mt-2">
-                            {% if is_owned %}
-                                {% for owned_card in owned_dict[ref.id] %}
-                                    <span class="badge {% if owned_card.finish == 'Reverse Holofoil' %}bg-info text-dark{% elif owned_card.finish == 'Holofoil' %}bg-warning text-dark{% else %}bg-secondary{% endif %}" 
-                                          data-bs-toggle="tooltip" 
-                                          title="Condition: {{ owned_card.condition }} | Notes: {{ owned_card.notes or 'None' }}">
-                                        {{ owned_card.finish }} 
-                                        {% if owned_card.is_graded %}
-                                            ({{ owned_card.grade }})
-                                        {% endif %}
-                                    </span>
+                            {% if ref.available_finishes %}
+                                {% for finish in ref.available_finishes.split(',') %}
+                                    
+                                    {% set ns = namespace(found=false, owned_card=none) %}
+                                    {% if is_owned %}
+                                        {% for oc in owned_dict[ref.id] %}
+                                            {% if oc.finish|lower == finish|lower %}
+                                                {% set ns.found = true %}
+                                                {% set ns.owned_card = oc %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+
+                                    {% if ns.found %}
+                                        <span class="badge {% if finish == 'Reverse Holofoil' %}bg-info text-dark{% elif finish == 'Holofoil' %}bg-warning text-dark{% else %}bg-secondary{% endif %} shadow-sm" 
+                                              data-bs-toggle="tooltip" 
+                                              title="Condition: {{ ns.owned_card.condition }} | Notes: {{ ns.owned_card.notes or 'None' }}">
+                                            ✅ {{ finish }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-dark border border-secondary text-secondary opacity-75">
+                                            ❌ {{ finish }}
+                                        </span>
+                                    {% endif %}
+
                                 {% endfor %}
-                            {% else %}
-                                <span class="badge bg-dark border border-secondary text-secondary">Awaiting Capture</span>
                             {% endif %}
                         </div>
                     </div>

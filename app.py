@@ -82,6 +82,8 @@ class CardReference(db.Model):
 
     # NEW: Phase 1 - Track if this is a species you are actively chasing
     is_favorite = db.Column(db.Boolean, default=False)
+    # NEW: Phase 1.5 - Track all available finishes for this card
+    available_finishes = db.Column(db.String(255), default="Normal")
 
 class Card(db.Model):
     # New: Inventory Segregation
