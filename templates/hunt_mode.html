@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}HUNT: {{ species }}{% endblock %}
+
+{% block content %}
+<style>
+    body { background-color: #121212; color: #ffffff; }
+    .hunt-card { border-bottom: 2px solid #333; padding-bottom: 2rem; margin-bottom: 2rem; }
+    .navbar { display: none !important; } /* Hide the nav bar for full screen focus */
+</style>
+
+<div class="container-fluid p-0">
+    <div class="bg-danger text-white p-3 sticky-top d-flex justify-content-between align-items-center shadow">
+        <h3 class="mb-0 fw-bold">🎯 {{ species }} HUNT</h3>
+        <a href="{{ url_for('pokedex_binder', species=species) }}" class="btn btn-outline-light btn-sm fw-bold">Exit</a>
+    </div>
+
+    <div class="container py-3">
+        <div class="text-center mb-4 text-secondary">
+            <small class="fw-bold">{{ targets|length }} distinct artworks have missing variants.</small>
+        </div>
+
+        {% for target in targets %}
+        <div class="hunt-card">
+            <img src="{{ target.ref.image_url }}" class="img-fluid rounded shadow w-100 mb-3" style="max-width: 500px; display: block; margin: 0 auto;" alt="{{ target.ref.name }}">
+            
+            <div class="text-center mb-3">
+                <h4 class="fw-bold mb-0">{{ target.ref.set_name }}</h4>
+                <p class="text-muted small">Card #{{ target.ref.number }} | Released: {{ target.ref.release_date[:4] }}</p>
+            </div>
+
+            <div class="d-grid gap-2 col-md-6 mx-auto">
+                {% for finish in target.missing_finishes %}
+                    <a href="{{ url_for('admin', auto_name=target.ref.name, auto_set=target.ref.set_name, auto_num=target.ref.number, auto_finish=finish, auto_img=target.ref.image_url) }}" 
+                       class="btn {% if finish == 'Reverse Holofoil' %}btn-info{% elif finish == 'Holofoil' %}btn-warning{% else %}btn-outline-light{% endif %} btn-lg d-flex justify-content-between align-items-center fw-bold">
+                        <span>NEEDED: {{ finish }}</span>
+                        <span>📷 Capture</span>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center py-5 mt-5">
+            <h1 class="display-1 text-success">🏆</h1>
+            <h2 class="fw-bold mt-3">Hunt Complete!</h2>
+            <p class="text-muted">You own every known variant of {{ species }}.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

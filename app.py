@@ -85,6 +85,11 @@ class CardReference(db.Model):
     # NEW: Phase 1.5 - Track all available finishes for this card
     available_finishes = db.Column(db.String(255), default="Normal")
 
+    class MasterTracker(db.Model):
+    """Tracks the umbrella species you are hunting (e.g. 'Meowth') to group all wildcards."""
+    id = db.Column(db.Integer, primary_key=True)
+    species_name = db.Column(db.String(50), unique=True, nullable=False)
+
 class Card(db.Model):
     # New: Inventory Segregation
     status = db.Column(db.String(20), default='Personal', nullable=False)
@@ -899,17 +904,16 @@ def update_card(id):
 @app.route('/pokedex')
 @login_required
 def pokedex_hub():
-    # 1. Get a unique list of favorited species names
-    fav_records = CardReference.query.filter_by(is_favorite=True).all()
-    fav_species = sorted(list(set([c.name for c in fav_records])))
-    
+    trackers = MasterTracker.query.all()
     stats = []
-    for species in fav_species:
-        # Total printed variants in the official dictionary
-        total_refs = CardReference.query.filter_by(name=species).all()
+    
+    for t in trackers:
+        species = t.species_name
+        
+        # THE FIX: %Wildcard% match catches Alolan, V, EX, Rocket's, etc.
+        total_refs = CardReference.query.filter(CardReference.name.ilike(f"%{species}%")).all()
         total_count = len(total_refs)
         
-        # Owned variants (distinct reference_ids owned by the user)
         ref_ids = [r.id for r in total_refs]
         owned_count = db.session.query(Card.reference_id).filter(
             Card.user_id == current_user.id,
@@ -930,88 +934,86 @@ def pokedex_hub():
 @app.route('/api/toggle_favorite', methods=['POST'])
 @login_required
 def toggle_favorite():
-    species_name = request.form.get('species_name').strip()
+    species_name = request.form.get('species_name').strip().title()
     if not species_name:
         return redirect(url_for('pokedex_hub'))
         
-    # Find all dictionary entries with this exact name
-    cards = CardReference.query.filter(CardReference.name.ilike(species_name)).all()
-    if not cards:
-        flash(f"Could not find '{species_name}' in the dictionary. Check your spelling!")
-        return redirect(url_for('pokedex_hub'))
+    existing = MasterTracker.query.filter_by(species_name=species_name).first()
+    
+    if existing:
+        db.session.delete(existing)
+        db.session.commit()
+        flash(f"Removed {species_name} from Master Sets.")
+    else:
+        new_tracker = MasterTracker(species_name=species_name)
+        db.session.add(new_tracker)
+        db.session.commit()
+        flash(f"Added {species_name} umbrella to Master Sets. Tracking all variants!")
         
-    # Toggle the boolean
-    new_status = not cards[0].is_favorite
-    for c in cards:
-        c.is_favorite = new_status
-        
-    db.session.commit()
-    action = "Added" if new_status else "Removed"
-    flash(f"{action} {species_name.capitalize()} to your Master Set targets!")
     return redirect(url_for('pokedex_hub'))
 
 @app.route('/pokedex/<species>')
 @login_required
 def pokedex_binder(species):
-    # 1. Verify this is a tracked species
-    ref_check = CardReference.query.filter(
-        CardReference.name.ilike(species), 
-        CardReference.is_favorite == True
-    ).first()
-    
-    if not ref_check:
-        flash(f"You are not tracking {species} yet. Add it to your favorites first!")
-        return redirect(url_for('pokedex_hub'))
-
-    # 2. Grab the Master Dictionary for this species (Grouped by Set/Artwork)
+    # THE FIX: Wildcard search for the Binder
     master_cards = CardReference.query.filter(
-        CardReference.name.ilike(species)
+        CardReference.name.ilike(f"%{species}%")
     ).order_by(CardReference.release_date.desc()).all()
 
-    # 3. Grab the User's Owned Inventory for this species
+    if not master_cards:
+        flash(f"No cards found containing '{species}'.")
+        return redirect(url_for('pokedex_hub'))
+
     ref_ids = [c.id for c in master_cards]
     owned_cards = Card.query.filter(
         Card.user_id == current_user.id,
         Card.reference_id.in_(ref_ids)
     ).all()
 
-    # 4. Organize owned cards into a dictionary mapped to the reference_id
-    # Format: { 'base1-4': [CardObj(Normal), CardObj(Reverse Holo)], ... }
     owned_dict = {}
     for oc in owned_cards:
         if oc.reference_id not in owned_dict:
             owned_dict[oc.reference_id] = []
         owned_dict[oc.reference_id].append(oc)
 
-    return render_template(
-        'pokedex_binder.html', 
-        species=species.capitalize(), 
-        master_cards=master_cards, 
-        owned_dict=owned_dict
-    )
+    return render_template('pokedex_binder.html', species=species.capitalize(), master_cards=master_cards, owned_dict=owned_dict)
 
-@app.route('/api/force_variant', methods=['POST'])
+@app.route('/hunt/<species>')
 @login_required
-def force_variant():
-    ref_id = request.form.get('reference_id')
-    new_finish = request.form.get('new_finish')
-    
-    card_ref = CardReference.query.get(ref_id)
-    if card_ref and new_finish:
-        # Get current finishes, or start empty if none exist
-        current_finishes = card_ref.available_finishes.split(',') if card_ref.available_finishes else []
-        
-        # Don't add duplicates
-        if new_finish not in current_finishes:
-            current_finishes.append(new_finish)
-            card_ref.available_finishes = ",".join(current_finishes)
-            db.session.commit()
-            flash(f"✅ Successfully forced '{new_finish}' variant onto {card_ref.name} ({card_ref.set_name})!")
-        else:
-            flash(f"⚠️ {card_ref.name} already has {new_finish} tracked.")
+def hunt_mode(species):
+    # THE FIX: Wildcard search for Hunt Mode
+    master_cards = CardReference.query.filter(
+        CardReference.name.ilike(f"%{species}%")
+    ).order_by(CardReference.release_date.asc()).all()
+
+    ref_ids = [c.id for c in master_cards]
+    owned_cards = Card.query.filter(
+        Card.user_id == current_user.id,
+        Card.reference_id.in_(ref_ids)
+    ).all()
+
+    owned_dict = {}
+    for oc in owned_cards:
+        if oc.reference_id not in owned_dict:
+            owned_dict[oc.reference_id] = []
+        owned_dict[oc.reference_id].append(oc.finish.lower())
+
+    hunt_targets = []
+    for ref in master_cards:
+        if not ref.available_finishes:
+            continue
             
-    # request.referrer sends you right back to the exact Pokedex page you were on
-    return redirect(request.referrer or url_for('pokedex_hub'))
+        available = [f.strip() for f in ref.available_finishes.split(',')]
+        owned = owned_dict.get(ref.id, [])
+        missing = [f for f in available if f.lower() not in owned]
+        
+        if missing:
+            hunt_targets.append({
+                'ref': ref,
+                'missing_finishes': missing
+            })
+
+    return render_template('hunt_mode.html', species=species.capitalize(), targets=hunt_targets)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

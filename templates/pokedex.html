@@ -42,7 +42,7 @@
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-between">
                         <a href="{{ url_for('pokedex_binder', species=stat.name) }}" class="btn btn-sm btn-outline-dark w-100 me-md-1">📖 View Binder</a>
-                        <button class="btn btn-sm btn-danger w-100 ms-md-1 fw-bold">🎯 HUNT MODE</button>
+                        <a href="{{ url_for('hunt_mode', species=species|default(stat.name)) }}" class="btn btn-danger btn-lg fw-bold shadow-sm">🎯 HUNT MODE</a>
                     </div>
                 </div>
             </div>
