@@ -70,6 +70,8 @@ class Settings(db.Model):
 
 class CardReference(db.Model):
     """Local cache of all official Pokemon cards for autocomplete"""
+    # New: Specific variant release dates (Fixes the Promo issue)
+    release_date = db.Column(db.String(25))
     id = db.Column(db.String(50), primary_key=True) # API ID (e.g. base1-4)
     name = db.Column(db.String(150), nullable=False)
     set_name = db.Column(db.String(100), nullable=False)
@@ -79,6 +81,8 @@ class CardReference(db.Model):
     tcgplayer_id = db.Column(db.String(50))
 
 class Card(db.Model):
+    # New: Inventory Segregation
+    status = db.Column(db.String(20), default='Personal', nullable=False)
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     game = db.Column(db.String(50), nullable=False)
