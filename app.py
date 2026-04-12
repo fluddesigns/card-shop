@@ -620,6 +620,7 @@ def add_card():
 
         new_card = Card(
             user_id = current_user.id,
+            status = request.form.get('status', 'Personal'), # NEW: Grabs the dropdown choice
             game = request.form.get('game'),
             card_name = request.form.get('card_name'),
             set_name = request.form.get('set_name'),
