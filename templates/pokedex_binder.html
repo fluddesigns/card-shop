@@ -63,6 +63,19 @@
                                 {% endfor %}
                             {% endif %}
                         </div>
+                        <div class="mt-3 pt-2 border-top border-secondary border-opacity-25">
+                            <form action="{{ url_for('force_variant') }}" method="POST" class="d-flex gap-1 justify-content-center">
+                                <input type="hidden" name="reference_id" value="{{ ref.id }}">
+                                <select name="new_finish" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: auto; font-size: 0.75rem;" required>
+                                    <option value="" disabled selected>+ Missing Variant</option>
+                                    <option value="Reverse Holofoil">Reverse Holofoil</option>
+                                    <option value="Holofoil">Holofoil</option>
+                                    <option value="1st Edition Normal">1st Edition Normal</option>
+                                    <option value="1st Edition Holofoil">1st Edition Holofoil</option>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem;">Add</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>

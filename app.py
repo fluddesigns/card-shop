@@ -990,5 +990,28 @@ def pokedex_binder(species):
         owned_dict=owned_dict
     )
 
+@app.route('/api/force_variant', methods=['POST'])
+@login_required
+def force_variant():
+    ref_id = request.form.get('reference_id')
+    new_finish = request.form.get('new_finish')
+    
+    card_ref = CardReference.query.get(ref_id)
+    if card_ref and new_finish:
+        # Get current finishes, or start empty if none exist
+        current_finishes = card_ref.available_finishes.split(',') if card_ref.available_finishes else []
+        
+        # Don't add duplicates
+        if new_finish not in current_finishes:
+            current_finishes.append(new_finish)
+            card_ref.available_finishes = ",".join(current_finishes)
+            db.session.commit()
+            flash(f"✅ Successfully forced '{new_finish}' variant onto {card_ref.name} ({card_ref.set_name})!")
+        else:
+            flash(f"⚠️ {card_ref.name} already has {new_finish} tracked.")
+            
+    # request.referrer sends you right back to the exact Pokedex page you were on
+    return redirect(request.referrer or url_for('pokedex_hub'))
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
