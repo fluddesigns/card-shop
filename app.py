@@ -1054,5 +1054,49 @@ def hunt_mode(species):
 
     return render_template('hunt_mode.html', species=species.capitalize(), targets=hunt_targets)
 
+@app.route('/api/force_api_fetch', methods=['POST'])
+@login_required
+def force_api_fetch():
+    api_id = request.form.get('api_id').strip()
+    if not api_id:
+        return redirect(url_for('admin'))
+
+    # Ping the API for this specific ID
+    url = f"https://api.pokemontcg.io/v2/cards/{api_id}"
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        api_data = response.json().get('data')
+        
+        # Check if we already have it
+        existing = CardReference.query.get(api_id)
+        if existing:
+            flash(f"ℹ️ {api_id} already exists in your local dictionary.")
+            return redirect(url_for('admin'))
+
+        # Inject the new card
+        images = api_data.get('images', {})
+        # We reuse our variant cleaner from the deep_dive script
+        from deep_dive import get_clean_finishes 
+        
+        new_ref = CardReference(
+            id=api_data['id'],
+            name=api_data['name'],
+            set_name=api_data.get('set', {}).get('name'),
+            set_id=api_data.get('set', {}).get('id'),
+            number=api_data.get('number'),
+            image_url=images.get('large') or images.get('small'),
+            release_date=api_data.get('set', {}).get('releaseDate'),
+            available_finishes=get_clean_finishes(api_data.get('tcgplayer')),
+            is_favorite=True # Automatically track it
+        )
+        db.session.add(new_ref)
+        db.session.commit()
+        flash(f"✅ Successfully injected {api_data['name']} ({api_id}) into your Pokedex!")
+    else:
+        flash(f"❌ API could not find a card with ID: {api_id}")
+        
+    return redirect(url_for('admin'))
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

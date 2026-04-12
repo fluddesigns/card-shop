@@ -139,6 +139,8 @@
                 </div>
             </div>
         </div>
+
+        
         
         <div class="accordion-item">
             <h2 class="accordion-header">
@@ -184,6 +186,28 @@
                             <label class="form-check-label" for="showPrices">Show Prices to Public</label>
                         </div>
                         <button type="submit" class="btn btn-sm btn-primary mt-2">Save Settings</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed text-danger fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAPI">
+                    💉 API Force-Fetch (Missing Cards)
+                </button>
+            </h2>
+            <div id="collapseAPI" class="accordion-collapse collapse" data-bs-parent="#adminTools">
+                <div class="accordion-body bg-light">
+                    <p class="small text-muted mb-3">
+                        If a card is missing from the database, enter its exact Pokémon TCG API ID (e.g., <code>base1-4</code>, <code>swsh4-12</code>, or <code>mcd21-1</code>) to force an injection.
+                    </p>
+                    <form action="{{ url_for('force_api_fetch') }}" method="POST" class="row g-2">
+                        <div class="col-8 col-md-9">
+                            <input type="text" name="api_id" class="form-control" placeholder="e.g. sm12-160" required>
+                        </div>
+                        <div class="col-4 col-md-3">
+                            <button type="submit" class="btn btn-danger w-100">Fetch & Inject</button>
+                        </div>
                     </form>
                 </div>
             </div>
