@@ -909,32 +909,59 @@ def pokedex_hub():
     
     for t in trackers:
         species = t.species_name
+        # Find all cards that belong to this species
         master_cards = CardReference.query.filter(CardReference.name.ilike(f"%{species}%")).all()
         
-        total_targets = 0
+        total_slots = 0
         owned_count = 0
         
         for ref in master_cards:
             finishes = ref.available_finishes.split(',') if ref.available_finishes else ["Normal"]
-            
-            # THE COLLECTOR FIX: Treat every finish as a distinct "Slot"
             for f in finishes:
-                total_targets += 1
+                total_slots += 1  # Every variant (1st Ed, Holo, etc.) is its own "slot"
                 
-                # Check if user owns THIS specific finish for THIS card
+                # Check if user owns THIS specific variant
                 is_owned = Card.query.filter_by(
                     user_id=current_user.id,
                     reference_id=ref.id,
-                    finish=f # Matches "1st Edition", "Reverse Holofoil", etc.
+                    finish=f
                 ).first()
-                
                 if is_owned:
                     owned_count += 1
         
-        pct = int((owned_count / total_targets) * 100) if total_targets > 0 else 0
-        stats.append({'name': species, 'total': total_targets, 'owned': owned_count, 'percent': pct})
+        pct = int((owned_count / total_slots) * 100) if total_slots > 0 else 0
+        stats.append({'name': species, 'total': total_slots, 'owned': owned_count, 'percent': pct})
         
     return render_template('pokedex.html', stats=stats)
+
+@app.route('/pokedex/<species>')
+@login_required
+def pokedex_binder(species):
+    # Group by artwork for the UI
+    master_cards = CardReference.query.filter(
+        CardReference.name.ilike(f"%{species}%")
+    ).order_by(CardReference.release_date.desc()).all()
+
+    if not master_cards:
+        return redirect(url_for('pokedex_hub'))
+
+    ref_ids = [c.id for c in master_cards]
+    owned_cards = Card.query.filter(
+        Card.user_id == current_user.id,
+        Card.reference_id.in_(ref_ids)
+    ).all()
+
+    # Map owned cards to their artwork IDs
+    owned_dict = {}
+    for oc in owned_cards:
+        if oc.reference_id not in owned_dict:
+            owned_dict[oc.reference_id] = []
+        owned_dict[oc.reference_id].append(oc)
+
+    return render_template('pokedex_binder.html', 
+                           species=species.capitalize(), 
+                           master_cards=master_cards, 
+                           owned_dict=owned_dict)
 
 @app.route('/api/toggle_favorite', methods=['POST'])
 @login_required
@@ -976,32 +1003,6 @@ def force_variant():
             flash(f"⚠️ {card_ref.name} already has {new_finish} tracked.")
             
     return redirect(request.referrer or url_for('pokedex_hub'))
-
-@app.route('/pokedex/<species>')
-@login_required
-def pokedex_binder(species):
-    # THE FIX: Wildcard search for the Binder
-    master_cards = CardReference.query.filter(
-        CardReference.name.ilike(f"%{species}%")
-    ).order_by(CardReference.release_date.desc()).all()
-
-    if not master_cards:
-        flash(f"No cards found containing '{species}'.")
-        return redirect(url_for('pokedex_hub'))
-
-    ref_ids = [c.id for c in master_cards]
-    owned_cards = Card.query.filter(
-        Card.user_id == current_user.id,
-        Card.reference_id.in_(ref_ids)
-    ).all()
-
-    owned_dict = {}
-    for oc in owned_cards:
-        if oc.reference_id not in owned_dict:
-            owned_dict[oc.reference_id] = []
-        owned_dict[oc.reference_id].append(oc)
-
-    return render_template('pokedex_binder.html', species=species.capitalize(), master_cards=master_cards, owned_dict=owned_dict)
 
 @app.route('/hunt/<species>')
 @login_required
