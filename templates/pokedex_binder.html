@@ -51,7 +51,7 @@
                                     {% if ns.found %}
                                         <span class="badge {% if finish == 'Reverse Holofoil' %}bg-info text-dark{% elif finish == 'Holofoil' %}bg-warning text-dark{% else %}bg-secondary{% endif %} shadow-sm" 
                                               data-bs-toggle="tooltip" 
-                                              title="Condition: {{ ns.owned_card.condition }} | Notes: {{ ns.owned_card.notes or 'None' }}">
+                                              title="Condition: {{ ns.owned_card.condition }}">
                                             ✅ {{ finish }}
                                         </span>
                                     {% else %}
