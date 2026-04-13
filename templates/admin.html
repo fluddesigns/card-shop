@@ -222,14 +222,9 @@
 
     <div class="card shadow-sm mb-5">
         <div class="card-header bg-white py-3">
-             <div class="row g-2 align-items-center">
-                <div class="col-md-4">
-                    <h5 class="mb-0 fw-bold">Inventory (<span id="visibleCount">{{ inventory|length }}</span>)</h5>
-                </div>
-                <div class="col-md-8">
-                     <div class="row g-2">
-                        <div class="col-12 col-md-4"><input type="text" id="adminSearch" class="form-control form-control-sm" placeholder="Search..."></div>
-                        <div class="col-6 col-md-3"><select id="filterGame" class="form-select form-select-sm"><option value="">All Games</option></select></div>
+             <div class="row g-2">
+                        <div class="col-12 col-md-3"><input type="text" id="adminSearch" class="form-control form-control-sm" placeholder="Search..."></div>
+                        <div class="col-6 col-md-2"><select id="filterGame" class="form-select form-select-sm"><option value="">All Games</option></select></div>
                         <div class="col-6 col-md-3"><select id="filterSet" class="form-select form-select-sm"><option value="">All Sets</option></select></div>
                         <div class="col-6 col-md-2">
                             <select id="sortInventory" class="form-select form-select-sm">
@@ -238,9 +233,16 @@
                                 <option value="name-asc">A-Z</option>
                             </select>
                         </div>
+                        <div class="col-6 col-md-2">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100" type="button" id="columnDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+                                    ⚙️ Columns
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="columnDropdown" id="columnToggleMenu">
+                                    </ul>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
         </div>
         
         <div class="card-body p-0">
@@ -250,37 +252,52 @@
                         <thead class="table-light">
                             <tr>
                                 <th style="width:40px;"><input type="checkbox" class="form-check-input" id="selectAll"></th>
-                                <th>Card Name</th>
-                                <th>Set</th>
-                                <th>Game</th>
-                                <th>Cond</th>
-                                <th>Price</th>
-                                <th>Updated</th> <th>Qty</th>
-                                <th>Actions</th>
+                                <th class="col-name">Card Name</th>
+                                <th class="col-number">Card #</th>
+                                <th class="col-set">Set</th>
+                                <th class="col-game">Game</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-finish">Finish</th>
+                                <th class="col-cond">Cond</th>
+                                <th class="col-slab">Graded</th>
+                                <th class="col-loc">Location</th>
+                                <th class="col-price">Price</th>
+                                <th class="col-updated">Updated</th>
+                                <th class="col-qty">Qty</th>
+                                <th class="col-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="inventoryBody">
                             {% for card in inventory %}
                             <tr class="inventory-row" data-id="{{ card.id }}" data-name="{{ card.card_name|lower }}" data-set="{{ card.set_name }}" data-game="{{ card.game }}" data-price="{{ card.price }}">
                                 <td class="text-center"><input type="checkbox" class="form-check-input card-checkbox" name="card_ids" value="{{ card.id }}"></td>
-                                <td>
+                                <td class="col-name">
                                     <span class="fw-bold">{{ card.card_name }}</span>
                                     {% if card.is_first_edition %}
                                         <span class="badge bg-warning text-dark border border-dark ms-1" style="font-size:0.6em;">1st Ed</span>
                                     {% endif %}
+                                </td>
+                                <td class="col-number"><small class="text-muted">{{ card.card_number or '-' }}</small></td>
+                                <td class="col-set"><small class="text-muted">{{ card.set_name }}</small></td>
+                                <td class="col-game"><small class="text-muted">{{ card.game }}</small></td>
+                                <td class="col-status"><span class="badge {% if card.status == 'Sales' %}bg-success{% else %}bg-secondary{% endif %}">{{ card.status }}</span></td>
+                                <td class="col-finish">{{ card.finish or 'Normal' }}</td>
+                                <td class="col-cond">{{ card.condition }}</td>
+                                <td class="col-slab">
                                     {% if card.grading_company %}
-                                        <span class="badge bg-danger rounded-pill ms-1">{{ card.grading_company }} {{ card.grade }}</span>
+                                        <span class="badge bg-danger rounded-pill" style="font-size: 0.7em;">{{ card.grading_company }} {{ card.grade }}</span>
+                                        <div class="text-muted" style="font-size:0.65em;">{{ card.cert_number }}</div>
+                                    {% else %}
+                                        -
                                     {% endif %}
                                 </td>
-                                <td><small class="text-muted">{{ card.set_name }}</small></td>
-                                <td><small class="text-muted">{{ card.game }}</small></td>
-                                <td>{{ card.condition }}</td>
-                                <td class="price-cell text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
-                                <td class="date-cell text-muted small">
+                                <td class="col-loc">{{ card.location or '-' }}</td>
+                                <td class="col-price price-cell text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
+                                <td class="col-updated date-cell text-muted small">
                                     {{ card.last_updated.strftime('%m-%d') if card.last_updated else '-' }}
                                 </td>
-                                <td>{{ card.quantity }}</td>
-                                <td>
+                                <td class="col-qty">{{ card.quantity }}</td>
+                                <td class="col-actions">
                                     <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal{{ card.id }}">✏️</button>
                                 </td>
                             </tr>
@@ -471,19 +488,106 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- STANDARD TABLE FILTERING ---
+    // --- ADVANCED TABLE FILTERING & COLUMNS ---
     const rows = Array.from(document.querySelectorAll('.inventory-row'));
     const adminSearch = document.getElementById('adminSearch');
+    const filterGame = document.getElementById('filterGame');
+    const filterSet = document.getElementById('filterSet');
+    const visibleCountEl = document.getElementById('visibleCount');
+
+    // 1. Dynamically Populate Dropdowns
+    const uniqueGames = new Set();
+    const uniqueSets = new Set();
     
-    if(adminSearch) {
-        adminSearch.addEventListener('keyup', function() {
-            const val = this.value.toLowerCase();
-            rows.forEach(row => {
-                const text = row.dataset.name + " " + row.dataset.set;
-                row.style.display = text.includes(val) ? '' : 'none';
+    rows.forEach(row => {
+        if(row.dataset.game) uniqueGames.add(row.dataset.game);
+        if(row.dataset.set) uniqueSets.add(row.dataset.set);
+    });
+
+    Array.from(uniqueGames).sort().forEach(game => {
+        filterGame.add(new Option(game, game));
+    });
+    Array.from(uniqueSets).sort().forEach(set => {
+        filterSet.add(new Option(set, set));
+    });
+
+    // 2. Master Filter Function
+    function applyFilters() {
+        const searchVal = adminSearch.value.toLowerCase();
+        const gameVal = filterGame.value;
+        const setVal = filterSet.value;
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const text = (row.dataset.name + " " + row.dataset.set).toLowerCase();
+            const rowGame = row.dataset.game;
+            const rowSet = row.dataset.set;
+
+            const matchSearch = text.includes(searchVal);
+            const matchGame = gameVal === "" || rowGame === gameVal;
+            const matchSet = setVal === "" || rowSet === setVal;
+
+            if (matchSearch && matchGame && matchSet) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+                const cb = row.querySelector('.card-checkbox');
+                if(cb) cb.checked = false; // Uncheck hidden rows
+            }
+        });
+
+        visibleCountEl.innerText = visibleCount;
+        updateBulk(); // Recalculate bulk action bar
+    }
+
+    if(adminSearch) adminSearch.addEventListener('keyup', applyFilters);
+    if(filterGame) filterGame.addEventListener('change', applyFilters);
+    if(filterSet) filterSet.addEventListener('change', applyFilters);
+
+    // 3. Column Toggler Logic
+    const columns = [
+        { id: 'col-number', label: 'Card #', defaultShow: true },
+        { id: 'col-set', label: 'Set', defaultShow: true },
+        { id: 'col-game', label: 'Game', defaultShow: false },
+        { id: 'col-status', label: 'Status', defaultShow: false },
+        { id: 'col-finish', label: 'Finish', defaultShow: true },
+        { id: 'col-cond', label: 'Cond', defaultShow: true },
+        { id: 'col-slab', label: 'Graded Info', defaultShow: false },
+        { id: 'col-loc', label: 'Location', defaultShow: false },
+        { id: 'col-price', label: 'Price', defaultShow: true },
+        { id: 'col-updated', label: 'Updated', defaultShow: false }
+    ]; // Name, Qty, Actions, and CB are permanent.
+
+    const columnMenu = document.getElementById('columnToggleMenu');
+    
+    columns.forEach(col => {
+        // Build the switches in the UI
+        const li = document.createElement('li');
+        li.className = 'px-3 py-1';
+        li.innerHTML = `
+            <div class="form-check form-switch">
+                <input class="form-check-input col-toggle" type="checkbox" id="toggle-${col.id}" data-target="${col.id}" ${col.defaultShow ? 'checked' : ''}>
+                <label class="form-check-label small" for="toggle-${col.id}">${col.label}</label>
+            </div>
+        `;
+        columnMenu.appendChild(li);
+
+        // Hide columns that are disabled by default
+        if(!col.defaultShow) {
+            document.querySelectorAll(`.${col.id}`).forEach(el => el.style.display = 'none');
+        }
+    });
+
+    // Add event listeners to the generated switches
+    document.querySelectorAll('.col-toggle').forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const targetClass = this.dataset.target;
+            document.querySelectorAll(`.${targetClass}`).forEach(el => {
+                el.style.display = this.checked ? '' : 'none';
             });
         });
-    }
+    });
     
     // --- BULK UI ---
     const checkboxes = document.querySelectorAll('.card-checkbox');
