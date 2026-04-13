@@ -32,61 +32,75 @@
 </head>
 <body class="bg-body-tertiary d-flex flex-column min-vh-100">
 
-    <nav class="navbar navbar-expand-lg border-bottom shadow-sm bg-body">
+    <nav class="navbar navbar-expand-lg border-bottom shadow-sm bg-body sticky-top">
         <div class="container-fluid px-lg-5">
             <a class="navbar-brand brand-text" href="{{ url_for('index') }}">
                 FLUD MEDIA
             </a>
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
                 <span class="navbar-toggler-icon"></span>
             </button>
             
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0 fw-semibold">
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('trade_tool') }}">Trade Tool</a></li>
-                </ul>
+            <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+                <div class="offcanvas-header border-bottom">
+                    <h5 class="offcanvas-title brand-text" id="offcanvasNavbarLabel">FLUD MEDIA</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+                </div>
                 
-                <ul class="navbar-nav ms-auto align-items-center fw-semibold">
+                <div class="offcanvas-body">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 fw-semibold">
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('trade_tool') }}">Trade Tool</a></li>
+                    </ul>
                     
-                    <li class="nav-item me-2">
-                        <button id="themeToggle" class="btn btn-link nav-link fs-5 text-body" title="Toggle Theme">
-                            🌓
-                        </button>
-                    </li>
-
-                    <li class="nav-item me-3">
-                        <a class="nav-link position-relative d-flex align-items-center" href="{{ url_for('view_cart') }}">
-                            🛒 Cart
-                            {% if session.get('cart') %}
-                                <span class="position-absolute top-25 start-100 translate-middle badge rounded-pill bg-danger" id="cart-count">
-                                    {{ session['cart']|length }}
-                                </span>
-                            {% endif %}
-                        </a>
-                    </li>
-
-                    {% if current_user.is_authenticated %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle btn btn-outline-danger border-0 px-3 rounded-pill" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                                👤 {{ current_user.username|capitalize }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
-                                <li><h6 class="dropdown-header text-danger fw-bold">Management</h6></li>
-                                <li><a class="dropdown-item" href="{{ url_for('admin') }}">📦 Inventory</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('pokedex_hub') }}">📕 Pokedex</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('sales') }}">💰 Sales History</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('profile') }}">🏪 Public Shop</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('logout') }}">🚪 Logout</a></li>
-                            </ul>
+                    <ul class="navbar-nav ms-auto align-items-center fw-semibold">
+                        
+                        <li class="nav-item me-2 d-none d-lg-block">
+                            <button id="themeToggle" class="btn btn-link nav-link fs-5 text-body" title="Toggle Theme">
+                                🌓
+                            </button>
                         </li>
-                    {% else %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
-                        <li class="nav-item"><a class="nav-link btn btn-danger text-white ms-2 px-3 rounded-pill" href="{{ url_for('register') }}">Register</a></li>
-                    {% endif %}
-                </ul>
+                        
+                        <li class="nav-item d-lg-none w-100 text-start border-bottom pb-2 mb-2">
+                            <button id="themeToggleMobile" class="btn btn-link nav-link text-body px-0" onclick="document.getElementById('themeToggle').click();">
+                                🌓 Toggle Dark Mode
+                            </button>
+                        </li>
+
+                        <li class="nav-item me-lg-3 w-100 w-lg-auto text-start text-lg-center">
+                            <a class="nav-link position-relative d-inline-flex align-items-center" href="{{ url_for('view_cart') }}">
+                                🛒 Cart
+                                {% if session.get('cart') %}
+                                    <span class="position-absolute top-25 start-100 translate-middle badge rounded-pill bg-danger" id="cart-count">
+                                        {{ session['cart']|length }}
+                                    </span>
+                                {% endif %}
+                            </a>
+                        </li>
+
+                        {% if current_user.is_authenticated %}
+                            <li class="nav-item dropdown w-100 mt-3 mt-lg-0">
+                                <a class="nav-link dropdown-toggle btn btn-outline-danger border-0 px-3 rounded-pill text-start text-lg-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                                    👤 {{ current_user.username|capitalize }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
+                                    <li><h6 class="dropdown-header text-danger fw-bold">Management</h6></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin') }}">📦 Inventory</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('pokedex_hub') }}">📕 Pokedex</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('sales') }}">💰 Sales History</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('profile') }}">🏪 Public Shop</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('logout') }}">🚪 Logout</a></li>
+                                </ul>
+                            </li>
+                        {% else %}
+                            <li class="nav-item w-100 w-lg-auto text-start"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+                            <li class="nav-item w-100 w-lg-auto mt-2 mt-lg-0"><a class="nav-link btn btn-danger text-white ms-lg-2 px-3 rounded-pill d-inline-block" href="{{ url_for('register') }}">Register</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
             </div>
         </div>
     </nav>
