@@ -1059,12 +1059,11 @@ def quick_capture():
     
     ref = CardReference.query.get_or_404(ref_id)
     
-    # Automatically check the 1st Edition box if the finish implies it
     is_1st = '1st Edition' in finish or '1st' in finish
     
     new_card = Card(
         user_id=current_user.id,
-        status='Personal', # Default Pokedex entries to Personal Binder
+        status='Personal', 
         reference_id=ref.id,
         game='Pokemon TCG',
         card_name=ref.name,
@@ -1080,6 +1079,11 @@ def quick_capture():
     db.session.add(new_card)
     db.session.commit()
     
+    # NEW: If the request is from our background Javascript, send a silent JSON response
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': f'Captured {finish}'})
+    
+    # Fallback for standard page reloads
     flash(f"🎉 Captured {ref.name} ({finish}) into your Binder!")
     return redirect(request.referrer or url_for('pokedex_hub'))
 

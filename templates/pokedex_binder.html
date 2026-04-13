@@ -31,7 +31,7 @@
                                         ✅ {{ finish.strip() }}
                                     </span>
                                 {% else %}
-                                    <form action="{{ url_for('quick_capture') }}" method="POST" class="m-0 p-0">
+                                    <form action="{{ url_for('quick_capture') }}" method="POST" class="m-0 p-0 quick-capture-form">
                                         <input type="hidden" name="reference_id" value="{{ ref.id }}">
                                         <input type="hidden" name="finish" value="{{ finish.strip() }}">
                                         <button type="submit" class="badge shadow-sm bg-dark border border-secondary text-secondary" style="font-size: 0.7rem; cursor: pointer;" title="Click to add to inventory!">
@@ -47,4 +47,52 @@
         {% endfor %}
     </div>
 </div>
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const captureForms = document.querySelectorAll('.quick-capture-form');
+
+    captureForms.forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault(); // Stop the page from reloading!
+
+            const btn = form.querySelector('button');
+            const originalText = btn.innerHTML;
+            const finishName = form.querySelector('input[name="finish"]').value;
+            
+            // Visual feedback that it's thinking
+            btn.innerHTML = '⏳ Saving...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest' // Tells Flask to send JSON
+                    }
+                });
+
+                if (response.ok) {
+                    // Success! Morph the button into the green ✅ pill
+                    btn.classList.remove('bg-dark', 'border', 'border-secondary', 'text-secondary');
+                    btn.classList.add('bg-success', 'text-white');
+                    btn.innerHTML = `✅ ${finishName}`;
+                    btn.style.cursor = 'default';
+                } else {
+                    // If something went wrong, revert it
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    alert("Failed to capture card. Please try again.");
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
 {% endblock %}
