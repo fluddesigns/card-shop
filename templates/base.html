@@ -115,7 +115,7 @@
                                 {% endif %}
                                 
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a href="{{ url_for('pokedex_hub') }}">📕 Pokedex</a></li>
+                                <li><a class="dropdown-item"href="{{ url_for('pokedex_hub') }}">📕 Pokedex</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('user_storefront', username=current_user.username) }}">Public Storefront</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('user_qr', username=current_user.username) }}">QR Code</a></li>
                                 <li><hr class="dropdown-divider"></li>
