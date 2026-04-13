@@ -114,7 +114,7 @@
                                 <li><a class="dropdown-item text-primary" href="{{ url_for('super_admin') }}">👑 Super Admin</a></li>
                                 {% endif %}
                                 
-                                <li><hr class="dropdown-divider"></li><a href="{{ url_for('pokedex_hub') }}" class="btn btn-danger me-2">📕 Pokedex</a>
+                                <li><hr class="dropdown-divider"></li><a href="{{ url_for('pokedex_hub') }}">📕 Pokedex</a>
                                 <li><a class="dropdown-item" href="{{ url_for('user_storefront', username=current_user.username) }}">Public Storefront</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('user_qr', username=current_user.username) }}">QR Code</a></li>
                                 <li><hr class="dropdown-divider"></li>
