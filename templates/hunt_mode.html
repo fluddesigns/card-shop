@@ -3,9 +3,10 @@
 
 {% block content %}
 <style>
-    body { background-color: #121212; color: #ffffff; }
-    .hunt-card { border-bottom: 2px solid #333; padding-bottom: 2rem; margin-bottom: 2rem; }
-    .navbar { display: none !important; } /* Hide the nav bar for full screen focus */
+    /* REMOVED the hardcoded body background and text color */
+    /* Updated the border to use Bootstrap's adaptive border variable */
+    .hunt-card { border-bottom: 2px solid var(--bs-border-color); padding-bottom: 2rem; margin-bottom: 2rem; }
+    .navbar { display: none !important; } 
 </style>
 
 <div class="container-fluid p-0">
