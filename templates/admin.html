@@ -25,7 +25,7 @@
     </div>
 
     <div id="priceProgressContainer" class="progress mb-3 d-none shadow-sm" style="height: 25px;">
-        <div id="priceProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark" role="progressbar" style="width: 0%">
+        <div id="priceProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-body" role="progressbar" style="width: 0%">
             Starting Update...
         </div>
     </div>
@@ -46,7 +46,7 @@
             <form method="POST" action="{{ url_for('bulk_actions') }}" id="bulkForm">
                 <div class="table-responsive">
                     <table class="table table-striped table-hover mb-0 align-middle" id="inventoryTable">
-                        <thead class="table-dark">
+                        <thead>
                             <tr>
                                 <th style="width:40px;"><input type="checkbox" class="form-check-input" id="selectAll"></th>
                                 <th class="col-name">Card Name</th>
@@ -71,7 +71,7 @@
                                 <td class="col-name">
                                     <span class="fw-bold">{{ card.card_name }}</span>
                                     {% if card.is_first_edition %}
-                                        <span class="badge bg-warning text-dark border border-dark ms-1" style="font-size:0.6em;">1st Ed</span>
+                                        <span class="badge bg-warning text-body border border-dark ms-1" style="font-size:0.6em;">1st Ed</span>
                                     {% endif %}
                                 </td>
                                 <td class="col-number"><small class="text-muted">{{ card.card_number or '-' }}</small></td>
@@ -123,7 +123,7 @@
 </div>
 
 <div class="offcanvas offcanvas-end shadow" tabindex="-1" id="filterOffcanvas">
-    <div class="offcanvas-header bg-light border-bottom">
+    <div class="offcanvas-header bg-body-secondary border-bottom">
         <h5 class="offcanvas-title fw-bold">🔍 View & Filters</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
     </div>
@@ -147,7 +147,7 @@
         
         <div class="mb-3">
             <label class="form-label text-muted small fw-bold text-uppercase">⚙️ Toggle Columns</label>
-            <div id="columnToggleContainer" class="p-3 bg-light rounded border">
+            <div id="columnToggleContainer" class="p-3 bg-body-secondary rounded border">
                 </div>
         </div>
     </div>
@@ -161,7 +161,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
-                <ul class="nav nav-tabs bg-light px-3 pt-2" id="addTabs" role="tablist">
+                <ul class="nav nav-tabs bg-body-secondary px-3 pt-2" id="addTabs" role="tablist">
                     <li class="nav-item"><button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#tabManual">Single Card</button></li>
                     <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tabPaste">Paste List</button></li>
                     <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tabCSV">CSV Upload</button></li>
@@ -255,15 +255,15 @@
                 <h5 class="modal-title fw-bold">⚙️ Settings & Tools</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4 bg-light">
+            <div class="modal-body p-4 bg-body-secondary">
                 
                 <h6 class="text-uppercase text-muted fw-bold small mb-3">Bulk Actions</h6>
                 <div class="d-grid gap-2 mb-4">
-                    <button onclick="updateAllPrices()" class="btn btn-warning text-dark fw-bold text-start">
+                    <button onclick="updateAllPrices()" class="btn btn-warning text-body fw-bold text-start">
                         💲 Fetch Latest Market Prices
                     </button>
                     <form action="{{ url_for('link_orphans') }}" method="POST" class="d-grid">
-                        <button type="submit" class="btn btn-info text-dark fw-bold text-start">🔗 Link Orphans to Pokedex</button>
+                        <button type="submit" class="btn btn-info text-body fw-bold text-start">🔗 Link Orphans to Pokedex</button>
                     </form>
                     <form action="{{ url_for('sync_db') }}" method="POST" class="d-grid">
                         <button type="submit" class="btn btn-outline-secondary fw-bold text-start">🔄 Sync Master DB Cache ({{ cache_count }} cards)</button>
@@ -381,7 +381,7 @@ async function updateAllPrices() {
                 const dateCell = row.querySelector('.date-cell');
                 const today = new Date();
                 dateCell.innerText = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                dateCell.classList.add('fw-bold', 'text-dark');
+                dateCell.classList.add('fw-bold', 'text-body');
                 
                 setTimeout(() => priceCell.classList.remove('bg-success', 'text-white'), 1000);
                 successCount++;
@@ -414,7 +414,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if(data.length > 0) {
                             data.forEach(item => {
                                 const a = document.createElement('a');
-                                a.className = 'list-group-item list-group-item-action text-dark pointer';
+                                a.className = 'list-group-item list-group-item-action text-body pointer';
                                 a.innerHTML = `<strong>${item.name}</strong> <small class='text-muted'>${item.set} #${item.number}</small>`;
                                 a.onclick = function() {
                                     document.getElementById('inputName').value = item.name;
