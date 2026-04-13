@@ -2,93 +2,59 @@
 <html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Flud Media TCG{% endblock %}</title>
     
-    {% block meta %}
-    <meta property="og:title" content="Card Market">
-    <meta property="og:description" content="Browse my local TCG inventory.">
-    <meta property="og:image" content="https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg">
-    {% endblock %}
-
-    <title>{% block title %}Card Market{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <script>
-        (() => {
-            const getStoredTheme = () => localStorage.getItem('theme');
-            const setStoredTheme = theme => localStorage.setItem('theme', theme);
-
-            const getPreferredTheme = () => {
-                const storedTheme = getStoredTheme();
-                if (storedTheme) {
-                    return storedTheme;
-                }
-                return 'dark'; // DEFAULT IS DARK
-            };
-
-            const setTheme = theme => {
-                document.documentElement.setAttribute('data-bs-theme', theme);
-            }
-
-            setTheme(getPreferredTheme());
-
-            window.toggleTheme = function() {
-                const current = document.documentElement.getAttribute('data-bs-theme');
-                const next = current === 'dark' ? 'light' : 'dark';
-                setTheme(next);
-                setStoredTheme(next);
-            }
-        })();
+        const storedTheme = localStorage.getItem('tcg-theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (storedTheme) {
+            document.documentElement.setAttribute('data-bs-theme', storedTheme);
+        } else if (prefersDark) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+        } else {
+            document.documentElement.setAttribute('data-bs-theme', 'light');
+        }
     </script>
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-    <link href="https://cdn.datatables.net/responsive/2.4.1/css/responsive.bootstrap5.min.css" rel="stylesheet">
-    
     <style>
-        .pokeball-logo {
-            width: 36px;
-            height: 36px;
-            background: radial-gradient(white 33%, black 33% 40%, transparent 40%),
-                        linear-gradient(to bottom, #e3350d 46%, black 46% 54%, white 54%);
-            border: 2px solid black;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        /* Navbar tweaks to look good in both modes */
-        .navbar-custom { background-color: var(--bs-body-bg); border-bottom: 1px solid var(--bs-border-color); }
-        [data-bs-theme="dark"] .navbar-custom { background-color: #212529 !important; }
+        /* Custom Brand Adjustments */
+        .brand-text { color: #dc3545; font-weight: 800; letter-spacing: -0.5px; }
         
-        body { 
-            padding-top: 56px; 
-            margin: 0;
-            padding-bottom: 60px; /* Space for Sticky Cart on Mobile */
-        }
+        /* Subtle transitions for smooth mode toggling */
+        body, .card, .modal-content, .offcanvas { transition: background-color 0.3s ease, color 0.3s ease; }
         
-        {% block styles %}{% endblock %}
+        /* Ensure inputs look good in both modes */
+        .form-control:focus, .form-select:focus { border-color: #dc3545; box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25); }
     </style>
 </head>
-<body>
+<body class="bg-body-tertiary d-flex flex-column min-vh-100">
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
-        <div class="container">
-            <a class="navbar-brand fw-bold text-danger" href="{{ url_for('index') }}">
-                Flud Media TCG
+    <nav class="navbar navbar-expand-lg border-bottom shadow-sm bg-body">
+        <div class="container-fluid px-lg-5">
+            <a class="navbar-brand brand-text" href="{{ url_for('index') }}">
+                FLUD MEDIA
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">Home</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('trade_tool') }}">Trade Tool</a>
-                    </li>
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 fw-semibold">
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('trade_tool') }}">Trade Tool</a></li>
                 </ul>
                 
-                <ul class="navbar-nav ms-auto align-items-center">
+                <ul class="navbar-nav ms-auto align-items-center fw-semibold">
+                    
+                    <li class="nav-item me-2">
+                        <button id="themeToggle" class="btn btn-link nav-link fs-5 text-body" title="Toggle Theme">
+                            🌓
+                        </button>
+                    </li>
+
                     <li class="nav-item me-3">
                         <a class="nav-link position-relative d-flex align-items-center" href="{{ url_for('view_cart') }}">
                             🛒 Cart
@@ -102,42 +68,50 @@
 
                     {% if current_user.is_authenticated %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle fw-bold text-white" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <a class="nav-link dropdown-toggle btn btn-outline-danger border-0 px-3 rounded-pill" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
                                 👤 {{ current_user.username|capitalize }}
                             </a>
-                            <ul class="dropdown-menu dropdown-menu-end shadow border-0" aria-labelledby="userDropdown">
-                                <li><h6 class="dropdown-header text-danger fw-bold">Inventory Management</h6></li>
-                                <li><a class="dropdown-item" href="{{ url_for('admin') }}">📦 Manage Inventory</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('pokedex_hub') }}">📕 My Pokedex</a></li>
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
+                                <li><h6 class="dropdown-header text-danger fw-bold">Management</h6></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin') }}">📦 Inventory</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('pokedex_hub') }}">📕 Pokedex</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('sales') }}">💰 Sales History</a></li>
-                                
                                 <li><hr class="dropdown-divider"></li>
-                                
-                                <li><h6 class="dropdown-header text-danger fw-bold">Storefront Settings</h6></li>
-                                <li><a class="dropdown-item" href="{{ url_for('profile') }}">🏪 View Public Shop</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('profile') }}">🏪 Public Shop</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                
-                                <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">🚪 Logout</a></li>
+                                <li><a class="dropdown-item text-danger fw-bold" href="{{ url_for('logout') }}">🚪 Logout</a></li>
                             </ul>
                         </li>
                     {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link btn btn-danger btn-sm text-white ms-2 px-3" href="{{ url_for('register') }}">Register</a>
-                        </li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+                        <li class="nav-item"><a class="nav-link btn btn-danger text-white ms-2 px-3 rounded-pill" href="{{ url_for('register') }}">Register</a></li>
                     {% endif %}
                 </ul>
             </div>
         </div>
     </nav>
 
-    {% block content %}{% endblock %}
+    <main class="flex-grow-1">
+        {% block content %}{% endblock %}
+    </main>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <footer class="bg-body border-top py-3 mt-auto text-center text-muted small">
+        <div class="container">
+            &copy; <script>document.write(new Date().getFullYear())</script> Flud Media & Consulting LLC.
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-bs-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-bs-theme', newTheme);
+            localStorage.setItem('tcg-theme', newTheme);
+        });
+    </script>
+
     {% block scripts %}{% endblock %}
-
 </body>
 </html>
