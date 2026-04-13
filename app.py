@@ -216,6 +216,28 @@ def logout():
 def profile():
     return render_template('profile.html', user=current_user)
 
+@app.route('/admin/link_orphans', methods=['POST'])
+@login_required
+def link_orphans():
+    # Find all Pokemon cards in your inventory that aren't linked to the dictionary
+    orphans = Card.query.filter_by(user_id=current_user.id, reference_id=None, game='Pokemon TCG').all()
+    count = 0
+    
+    for card in orphans:
+        ref_match = None
+        if card.card_number:
+            ref_match = CardReference.query.filter_by(name=card.card_name, set_name=card.set_name, number=card.card_number).first()
+        if not ref_match:
+            ref_match = CardReference.query.filter_by(name=card.card_name, set_name=card.set_name).first()
+        
+        if ref_match:
+            card.reference_id = ref_match.id
+            count += 1
+            
+    db.session.commit()
+    flash(f"🔗 Successfully linked {count} orphaned cards to the Pokedex!")
+    return redirect(url_for('admin'))
+
 # --- PUBLIC STOREFRONTS ---
 
 @app.route('/u/<username>')
@@ -757,6 +779,33 @@ def upload_csv():
                 finish_val = get_val(row, ['finish', 'rarity', 'printing', 'foil'], 'Normal')
                 img_val = get_val(row, ['image', 'image url', 'photo url'], '')
                 loc_val = get_val(row, ['location', 'binder'], '')
+
+                ref_match = None
+                # 1. Try a strict match including Card Number first (Gold Standard)
+                if num_val:
+                    ref_match = CardReference.query.filter_by(name=name_val, set_name=set_val, number=num_val).first()
+                # 2. Fallback to just Name + Set if Number is missing
+                if not ref_match:
+                    ref_match = CardReference.query.filter_by(name=name_val, set_name=set_val).first()
+                
+                ref_id = ref_match.id if ref_match else None
+
+                db.session.add(Card(
+                    user_id=current_user.id,
+                    reference_id=ref_id, # <-- INJECTED HERE
+                    game=game_val,
+                    set_name=set_val,
+                    card_name=name_val,
+                    card_number=num_val,
+                    condition=cond_val,
+                    price=price_val,
+                    quantity=qty,
+                    finish=finish_val,
+                    image_url=img_val,
+                    location=loc_val
+                ))
+                total_qty_imported += qty
+
 
                 db.session.add(Card(
                     user_id=current_user.id,
