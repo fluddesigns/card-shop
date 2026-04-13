@@ -30,84 +30,55 @@
         .form-control:focus, .form-select:focus { border-color: #dc3545; box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25); }
     </style>
 </head>
-<body class="bg-body-tertiary m-0 p-0">
-    
-    <div class="d-flex flex-column min-vh-100 m-0 p-0">
-
-        <nav class="navbar navbar-expand-lg border-bottom shadow-sm bg-body sticky-top top-0 m-0">
-        <div class="container-fluid px-lg-5">
-            <a class="navbar-brand brand-text" href="{{ url_for('index') }}">
-                FLUD MEDIA
-            </a>
-            
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
-                <div class="offcanvas-header border-bottom">
-                    <h5 class="offcanvas-title brand-text" id="offcanvasNavbarLabel">FLUD MEDIA</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-                </div>
+<body class="bg-body-tertiary m-0 p-0" style="min-height: 100vh;">
+    <div class="d-flex flex-column min-vh-100">
+        
+        <nav class="navbar navbar-expand-lg border-bottom shadow-sm bg-body sticky-top top-0 w-100 m-0" style="z-index: 1030;">
+            <div class="container-fluid px-lg-5">
+                <a class="navbar-brand brand-text" href="{{ url_for('index') }}">FLUD MEDIA</a>
                 
-                <div class="offcanvas-body">
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 fw-semibold">
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('trade_tool') }}">Trade Tool</a></li>
-                    </ul>
+                <button class="navbar-toggler border-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                
+                <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar">
+                    <div class="offcanvas-header border-bottom">
+                        <h5 class="offcanvas-title brand-text">FLUD MEDIA</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+                    </div>
                     
-                    <ul class="navbar-nav ms-auto align-items-center fw-semibold">
-                        
-                        <li class="nav-item me-2 d-none d-lg-block">
-                            <button id="themeToggle" class="btn btn-link nav-link fs-5 text-body" title="Toggle Theme">
-                                🌓
-                            </button>
-                        </li>
-                        
-                        <li class="nav-item d-lg-none w-100 text-start border-bottom pb-2 mb-2">
-                            <button id="themeToggleMobile" class="btn btn-link nav-link text-body px-0" onclick="document.getElementById('themeToggle').click();">
-                                🌓 Toggle Dark Mode
-                            </button>
-                        </li>
-
-                        <li class="nav-item me-lg-3 w-100 w-lg-auto text-start text-lg-center">
-                            <a class="nav-link position-relative d-inline-flex align-items-center" href="{{ url_for('view_cart') }}">
-                                🛒 Cart
-                                {% if session.get('cart') %}
-                                    <span class="position-absolute top-25 start-100 translate-middle badge rounded-pill bg-danger" id="cart-count">
-                                        {{ session['cart']|length }}
-                                    </span>
-                                {% endif %}
-                            </a>
-                        </li>
-
-                        {% if current_user.is_authenticated %}
-                            <li class="nav-item w-100 w-lg-auto text-start"><a class="nav-link" href="{{ url_for('admin') }}">📦 Inventory</a></li>
-                            <li class="nav-item w-100 w-lg-auto text-start"><a class="nav-link" href="{{ url_for('pokedex_hub') }}">📕 Pokedex</a></li>
-                            <li class="nav-item w-100 w-lg-auto text-start"><a class="nav-link" href="{{ url_for('sales') }}">💰 Sales</a></li>
-                            <li class="nav-item w-100 w-lg-auto text-start"><a class="nav-link" href="{{ url_for('profile') }}">🏪 Shop</a></li>
-                            <li class="nav-item w-100 w-lg-auto text-start ms-lg-3 mt-2 mt-lg-0"><a class="nav-link text-danger fw-bold" href="{{ url_for('logout') }}">🚪 Logout</a></li>
-                        {% else %}
-                            <li class="nav-item w-100 w-lg-auto text-start"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
-                            <li class="nav-item w-100 w-lg-auto mt-2 mt-lg-0"><a class="nav-link btn btn-danger text-white ms-lg-2 px-3 rounded-pill d-inline-block" href="{{ url_for('register') }}">Register</a></li>
-                        {% endif %}
-                    </ul>
+                    <div class="offcanvas-body">
+                        <ul class="navbar-nav me-auto fw-semibold">
+                            <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{{ url_for('trade_tool') }}">Trade Tool</a></li>
+                        </ul>
+                        <ul class="navbar-nav ms-auto align-items-center fw-semibold">
+                            <li class="nav-item me-2 d-none d-lg-block">
+                                <button id="themeToggle" class="btn btn-link nav-link fs-5 text-body">🌓</button>
+                            </li>
+                            {% if current_user.is_authenticated %}
+                                <li class="nav-item"><a class="nav-link" href="{{ url_for('admin') }}">📦 Inventory</a></li>
+                                <li class="nav-item"><a class="nav-link" href="{{ url_for('pokedex_hub') }}">📕 Pokedex</a></li>
+                                <li class="nav-item"><a class="nav-link" href="{{ url_for('sales') }}">💰 Sales</a></li>
+                                <li class="nav-item"><a class="nav-link text-danger fw-bold ms-lg-3" href="{{ url_for('logout') }}">🚪 Logout</a></li>
+                            {% else %}
+                                <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
                 </div>
             </div>
-        </div>
-    </nav>
+        </nav>
 
-    <main class="flex-grow-1">
-        {% block content %}{% endblock %}
-    </main>
+        <main class="flex-grow-1">
+            {% block content %}{% endblock %}
+        </main>
 
-    <footer class="bg-body border-top py-3 mt-auto text-center text-muted small">
-        <div class="container">
-            &copy; <script>document.write(new Date().getFullYear())</script> Flud Media & Consulting LLC.
-        </div>
-    </footer>
-
-    </div> ```
+        <footer class="bg-body border-top py-3 text-center text-muted small">
+            &copy; Flud Media TCG
+        </footer>
+    </div>
+</body>```
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
