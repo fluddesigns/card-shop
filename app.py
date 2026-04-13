@@ -225,11 +225,29 @@ def link_orphans():
     
     for card in orphans:
         ref_match = None
-        if card.card_number:
-            ref_match = CardReference.query.filter_by(name=card.card_name, set_name=card.set_name, number=card.card_number).first()
-        if not ref_match:
-            ref_match = CardReference.query.filter_by(name=card.card_name, set_name=card.set_name).first()
         
+        # 1. Normalize the data (The "Straggler Hunter" fix)
+        # Converts "5/62" -> "5", and strips trailing spaces
+        clean_num = str(card.card_number).split('/')[0].strip() if card.card_number else None
+        clean_name = card.card_name.strip()
+        clean_set = card.set_name.strip()
+
+        # 2. Strict Number Match (but case-insensitive for names/sets)
+        if clean_num:
+            ref_match = CardReference.query.filter(
+                CardReference.name.ilike(clean_name),
+                CardReference.set_name.ilike(f"%{clean_set}%"),
+                CardReference.number == clean_num
+            ).first()
+            
+        # 3. Fallback to just Name + Set if Number still fails
+        if not ref_match:
+            ref_match = CardReference.query.filter(
+                CardReference.name.ilike(clean_name),
+                CardReference.set_name.ilike(f"%{clean_set}%")
+            ).first()
+        
+        # 4. Link it!
         if ref_match:
             card.reference_id = ref_match.id
             count += 1
