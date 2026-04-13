@@ -24,7 +24,7 @@
                                 {% set ns = namespace(owned=false) %}
                                 {% for oc in owned_dict.get(ref.id, []) %}
                                     {% if oc.finish|lower == finish|lower %}{% set ns.owned = true %}{% endif %}
-                                endfor %}
+                                {% endfor %}
 
                                 <span class="badge shadow-sm 
                                     {% if '1st Edition' in finish %}border border-warning text-warning
