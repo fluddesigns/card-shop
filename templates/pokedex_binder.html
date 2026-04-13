@@ -41,25 +41,6 @@
                                 {% endif %}
                             {% endfor %}
                         </div>
-
-                        <div class="mt-3">
-                            <button class="btn btn-link btn-sm text-muted text-decoration-none p-0" type="button" data-bs-toggle="collapse" data-bs-target="#override{{ ref.id }}">
-                                <small>Missing variant from API?</small>
-                            </button>
-                            <div class="collapse" id="override{{ ref.id }}">
-                                <form action="{{ url_for('force_variant') }}" method="POST" class="mt-1 pt-2 border-top border-secondary border-opacity-25 d-flex gap-1">
-                                    <input type="hidden" name="reference_id" value="{{ ref.id }}">
-                                    <select name="new_finish" class="form-select form-select-sm bg-dark text-white border-secondary" style="font-size: 0.7rem;">
-                                        <option value="" disabled selected>+ Tracker Slot</option>
-                                        <option value="1st Edition">1st Edition</option>
-                                        <option value="Unlimited">Unlimited</option>
-                                        <option value="Reverse Holofoil">Reverse Holo</option>
-                                    </select>
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
-                                </form>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
             </div>
