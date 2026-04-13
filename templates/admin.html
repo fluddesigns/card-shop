@@ -489,6 +489,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const checkboxes = document.querySelectorAll('.card-checkbox');
     const bulkBar = document.getElementById('bulkActionBar');
     const selCount = document.getElementById('selectedCount');
+    const selectAllBtn = document.getElementById('selectAll'); // Get the master checkbox
     
     function updateBulk() {
         const c = document.querySelectorAll('.card-checkbox:checked').length;
@@ -497,9 +498,28 @@ document.addEventListener('DOMContentLoaded', function() {
         else bulkBar.classList.add('d-none');
     }
     
+    // Listen for individual checkbox clicks
     checkboxes.forEach(cb => cb.addEventListener('change', updateBulk));
+    
+    // Master "Select All" logic
+    if(selectAllBtn) {
+        selectAllBtn.addEventListener('change', function() {
+            const isChecked = this.checked;
+            // Only grab rows that are currently visible (respects the search filter)
+            const visibleRows = Array.from(document.querySelectorAll('.inventory-row')).filter(r => r.style.display !== 'none');
+            
+            visibleRows.forEach(row => {
+                const cb = row.querySelector('.card-checkbox');
+                if(cb) cb.checked = isChecked;
+            });
+            updateBulk();
+        });
+    }
+
+    // Cancel button logic
     window.clearSelection = function() {
         checkboxes.forEach(cb => cb.checked = false);
+        if(selectAllBtn) selectAllBtn.checked = false; // Uncheck the master box too
         updateBulk();
     }
 });
