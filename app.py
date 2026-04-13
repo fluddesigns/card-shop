@@ -984,6 +984,38 @@ def toggle_favorite():
         
     return redirect(url_for('pokedex_hub'))
 
+@app.route('/api/quick_capture', methods=['POST'])
+@login_required
+def quick_capture():
+    ref_id = request.form.get('reference_id')
+    finish = request.form.get('finish')
+    
+    ref = CardReference.query.get_or_404(ref_id)
+    
+    # Automatically check the 1st Edition box if the finish implies it
+    is_1st = '1st Edition' in finish or '1st' in finish
+    
+    new_card = Card(
+        user_id=current_user.id,
+        status='Personal', # Default Pokedex entries to Personal Binder
+        reference_id=ref.id,
+        game='Pokemon TCG',
+        card_name=ref.name,
+        set_name=ref.set_name,
+        card_number=ref.number,
+        condition='NM',
+        finish=finish,
+        price=0.0,
+        quantity=1,
+        image_url=ref.image_url,
+        is_first_edition=is_1st
+    )
+    db.session.add(new_card)
+    db.session.commit()
+    
+    flash(f"🎉 Captured {ref.name} ({finish}) into your Binder!")
+    return redirect(request.referrer or url_for('pokedex_hub'))
+
 @app.route('/api/force_variant', methods=['POST'])
 @login_required
 def force_variant():

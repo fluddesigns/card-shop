@@ -23,29 +23,43 @@
                             {% for finish in ref.available_finishes.split(',') %}
                                 {% set ns = namespace(owned=false) %}
                                 {% for oc in owned_dict.get(ref.id, []) %}
-                                    {% if oc.finish|lower == finish|lower %}{% set ns.owned = true %}{% endif %}
+                                    {% if oc.finish|lower == finish.strip()|lower %}{% set ns.owned = true %}{% endif %}
                                 {% endfor %}
 
-                                <span class="badge shadow-sm 
-                                    {% if '1st Edition' in finish %}border border-warning text-warning
-                                    {% elif ns.owned %}bg-success
-                                    {% else %}bg-dark border border-secondary text-secondary{% endif %}"
-                                    style="font-size: 0.7rem;">
-                                    {% if ns.owned %}✅{% else %}❌{% endif %} {{ finish }}
-                                </span>
+                                {% if ns.owned %}
+                                    <span class="badge shadow-sm bg-success" style="font-size: 0.7rem;">
+                                        ✅ {{ finish.strip() }}
+                                    </span>
+                                {% else %}
+                                    <form action="{{ url_for('quick_capture') }}" method="POST" class="m-0 p-0">
+                                        <input type="hidden" name="reference_id" value="{{ ref.id }}">
+                                        <input type="hidden" name="finish" value="{{ finish.strip() }}">
+                                        <button type="submit" class="badge shadow-sm bg-dark border border-secondary text-secondary" style="font-size: 0.7rem; cursor: pointer;" title="Click to add to inventory!">
+                                            ❌ {{ finish.strip() }}
+                                        </button>
+                                    </form>
+                                {% endif %}
                             {% endfor %}
                         </div>
 
-                        <form action="{{ url_for('force_variant') }}" method="POST" class="mt-3 pt-2 border-top border-secondary border-opacity-25 d-flex gap-1">
-                            <input type="hidden" name="reference_id" value="{{ ref.id }}">
-                            <select name="new_finish" class="form-select form-select-sm bg-dark text-white border-secondary" style="font-size: 0.7rem;">
-                                <option value="" disabled selected>+ Slot</option>
-                                <option value="1st Edition">1st Edition</option>
-                                <option value="Unlimited">Unlimited</option>
-                                <option value="Reverse Holofoil">Reverse Holo</option>
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-secondary">Add</button>
-                        </form>
+                        <div class="mt-3">
+                            <button class="btn btn-link btn-sm text-muted text-decoration-none p-0" type="button" data-bs-toggle="collapse" data-bs-target="#override{{ ref.id }}">
+                                <small>Missing variant from API?</small>
+                            </button>
+                            <div class="collapse" id="override{{ ref.id }}">
+                                <form action="{{ url_for('force_variant') }}" method="POST" class="mt-1 pt-2 border-top border-secondary border-opacity-25 d-flex gap-1">
+                                    <input type="hidden" name="reference_id" value="{{ ref.id }}">
+                                    <select name="new_finish" class="form-select form-select-sm bg-dark text-white border-secondary" style="font-size: 0.7rem;">
+                                        <option value="" disabled selected>+ Tracker Slot</option>
+                                        <option value="1st Edition">1st Edition</option>
+                                        <option value="Unlimited">Unlimited</option>
+                                        <option value="Reverse Holofoil">Reverse Holo</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+                                </form>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
