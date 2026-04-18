@@ -357,22 +357,15 @@ def sync_db():
         return redirect(url_for('admin'))
     
     try:
-        # Fetch 250 cards to populate cache
-        api_url = "https://api.pokemontcg.io/v2/cards"
-        params = {'pageSize': 250} 
-        headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
-        
-        r = requests.get(api_url, params=params, headers=headers, timeout=30, verify=False)
-        
-        if r.status_code == 200:
-            data = r.json()
-            count = 0
-            if 'data' in data:
-                for item in data['data']:
-                    try:
                         c_id = item['id']
                         exists = CardReference.query.get(c_id)
+                        
+                        # Get the fresh data using our new helper
+                        fresh_finishes = get_clean_finishes(item.get('tcgplayer'))
+                        fresh_release = item.get('set', {}).get('releaseDate')
+
                         if not exists:
+                            # 1. ADD NEW CARDS
                             ref = CardReference(
                                 id=c_id,
                                 name=item['name'],
@@ -380,24 +373,22 @@ def sync_db():
                                 set_id=item['set']['id'],
                                 number=item['number'],
                                 image_url=item['images']['small'] if 'images' in item else None,
-                                # NEW: Capture release date and available finishes
-                                release_date=item.get('set', {}).get('releaseDate'),
-                                available_finishes=get_clean_finishes(item.get('tcgplayer'))
+                                release_date=fresh_release,
+                                available_finishes=fresh_finishes
                             )
                             db.session.add(ref)
                             count += 1
+                        else:
+                            # 2. THE FIX: UPDATE EXISTING CARDS!
+                            # If the existing card is stuck on the default "Normal", update it.
+                            if exists.available_finishes != fresh_finishes or not exists.release_date:
+                                exists.available_finishes = fresh_finishes
+                                exists.release_date = fresh_release
+                                count += 1 # Count it as successfully synced/updated
+                                
                     except Exception as e:
                         print(f"CRASH ON CARD {item.get('id')}: {str(e)}", flush=True)
                         continue
-                db.session.commit()
-                flash(f"Synced {count} new cards to reference cache.")
-            else:
-                flash("Sync Failed: Invalid data.")
-        else:
-            flash(f"Sync Failed: API Error {r.status_code}")
-            
-    except Exception as e:
-        flash(f"Sync Error: {str(e)}")
         
     return redirect(url_for('admin'))
 
