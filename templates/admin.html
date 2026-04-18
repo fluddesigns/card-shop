@@ -168,55 +168,102 @@
                     
                     <div class="tab-pane fade show active" id="tabManual">
                         <form action="{{ url_for('add_card') }}" method="POST" class="row g-3">
-                            <div class="col-md-12 mb-2 position-relative">
-                                <label class="form-label text-primary fw-bold">🔎 Search Dictionary (Type 3+ letters)</label>
-                                <input type="text" id="liveSearch" class="form-control" placeholder="e.g. 'Charizard Base'..." autocomplete="off">
-                                <div id="searchResults" class="list-group position-absolute w-100 shadow" style="z-index: 1055; display:none;"></div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Card Name</label>
-                                <input type="text" id="inputName" name="card_name" class="form-control" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Set Name</label>
-                                <input type="text" id="inputSet" name="set_name" class="form-control" required>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Card #</label>
-                                <input type="text" id="inputNumber" name="card_number" class="form-control">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Finish / Rarity</label>
-                                <select name="finish" class="form-select">
-                                    <option value="Normal">Normal</option>
-                                    <option value="Holofoil">Holofoil</option>
-                                    <option value="Reverse Holofoil">Reverse Holofoil</option>
-                                    <option value="1st Edition">1st Edition</option>
-                                    <option value="Unlimited">Unlimited</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Price ($)</label>
-                                <input type="number" step="0.01" name="price" class="form-control">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Qty</label>
-                                <input type="number" name="quantity" value="1" class="form-control">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label text-success fw-bold">Destination</label>
-                                <select name="status" class="form-select border-success">
-                                    <option value="Personal" selected>Binder (Personal)</option>
-                                    <option value="Sales">Storefront (Sales)</option>
-                                </select>
-                            </div>
-                            <input type="hidden" id="inputImage" name="image_url">
-                            <input type="hidden" name="game" value="Pokemon TCG">
-                            
-                            <div class="col-12 mt-3 text-end">
-                                <button type="submit" class="btn btn-danger px-4 fw-bold">Save Card</button>
-                            </div>
-                        </form>
+    <div class="col-md-12 mb-2 position-relative">
+        <label class="form-label text-primary fw-bold">🔎 Search Dictionary (Type 3+ letters)</label>
+        <input type="text" id="liveSearch" class="form-control form-control-lg" placeholder="e.g. 'Charizard Base'..." autocomplete="off">
+        <div id="searchResults" class="list-group position-absolute w-100 shadow" style="z-index: 1055; display:none;"></div>
+    </div>
+    
+    <div class="col-md-6">
+        <label class="form-label text-muted small fw-bold text-uppercase">Card Name</label>
+        <input type="text" id="inputName" name="card_name" class="form-control fw-bold" required>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label text-muted small fw-bold text-uppercase">Set Name</label>
+        <input type="text" id="inputSet" name="set_name" class="form-control" required>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label text-muted small fw-bold text-uppercase">Card #</label>
+        <input type="text" id="inputNumber" name="card_number" class="form-control">
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label text-muted small fw-bold text-uppercase">Condition</label>
+        <select name="condition" class="form-select border-primary fw-bold">
+            <option value="NM" selected>Near Mint (NM)</option>
+            <option value="LP">Lightly Played (LP)</option>
+            <option value="MP">Moderately Played (MP)</option>
+            <option value="HP">Heavily Played (HP)</option>
+            <option value="DMG">Damaged (DMG)</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label text-muted small fw-bold text-uppercase">Finish / Rarity</label>
+        <select name="finish" class="form-select">
+            <option value="Normal">Normal</option>
+            <option value="Holofoil">Holofoil</option>
+            <option value="Reverse Holofoil">Reverse Holofoil</option>
+            <option value="1st Edition">1st Edition</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label text-muted small fw-bold text-uppercase">Price ($)</label>
+        <input type="number" step="0.01" name="price" class="form-control text-success fw-bold">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label text-muted small fw-bold text-uppercase">Qty</label>
+        <input type="number" name="quantity" value="1" class="form-control text-center fw-bold">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label text-muted small fw-bold text-uppercase">Destination</label>
+        <select name="status" class="form-select border-success">
+            <option value="Personal" selected>Binder</option>
+            <option value="Sales">Sales</option>
+        </select>
+    </div>
+
+    <div class="col-12 mt-3">
+        <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="isGradedToggle" name="is_graded">
+            <label class="form-check-label fw-bold text-danger" for="isGradedToggle">Is this a Graded Slab?</label>
+        </div>
+        
+        <div class="row g-2 d-none p-3 bg-dark rounded border border-danger" id="gradedFields">
+            <div class="col-md-4">
+                <select name="grading_company" class="form-select">
+                    <option value="PSA">PSA</option>
+                    <option value="CGC">CGC</option>
+                    <option value="BGS">BGS</option>
+                    <option value="TAG">TAG</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="grade" class="form-control" placeholder="Grade (e.g. 10, 9.5)">
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="cert_number" class="form-control" placeholder="Cert # (Optional)">
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" id="inputImage" name="image_url">
+    <input type="hidden" name="game" value="Pokemon TCG">
+    
+    <div class="col-12 mt-4 text-end">
+        <button type="submit" class="btn btn-danger btn-lg px-5 fw-bold shadow-sm">Save Card to Inventory</button>
+    </div>
+</form>
+
+<script>
+    document.getElementById('isGradedToggle')?.addEventListener('change', function() {
+        const fields = document.getElementById('gradedFields');
+        if(this.checked) {
+            fields.classList.remove('d-none');
+        } else {
+            fields.classList.add('d-none');
+        }
+    });
+</script>
                     </div>
 
                     <div class="tab-pane fade" id="tabPaste">
@@ -312,24 +359,66 @@
 
 {% for card in inventory %}
 <div class="modal fade" id="editModal{{ card.id }}" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold">Edit Details</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white border-bottom border-secondary">
+                <h5 class="modal-title fw-bold">
+                    ✏️ Edit {{ card.card_name }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body bg-body-tertiary">
+                <div class="mb-4 text-center">
+                    <span class="badge bg-secondary">{{ card.set_name }} #{{ card.card_number or '-' }}</span>
+                    <span class="badge bg-info text-dark">{{ card.finish or 'Normal' }}</span>
+                </div>
+
                 <form action="{{ url_for('update_card', id=card.id) }}" method="POST">
                     <input type="hidden" name="action" value="update_details">
-                    <label class="small text-muted mb-1">Price</label>
-                    <input type="number" step="0.01" name="price" class="form-control mb-2" value="{{ card.price }}">
-                    <label class="small text-muted mb-1">Quantity</label>
-                    <input type="number" name="quantity" class="form-control mb-3" value="{{ card.quantity }}">
-                    <button class="btn btn-primary w-100 mb-2">Save</button>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-bold text-uppercase">Price</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark text-success border-secondary">$</span>
+                                <input type="number" step="0.01" name="price" class="form-control fw-bold text-success" value="{{ card.price }}">
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-bold text-uppercase">Quantity</label>
+                            <input type="number" name="quantity" class="form-control text-center fw-bold" value="{{ card.quantity }}">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-bold text-uppercase">Condition</label>
+                            <select name="condition" class="form-select">
+                                <option value="NM" {% if card.condition == 'NM' %}selected{% endif %}>Near Mint (NM)</option>
+                                <option value="LP" {% if card.condition == 'LP' %}selected{% endif %}>Lightly Played (LP)</option>
+                                <option value="MP" {% if card.condition == 'MP' %}selected{% endif %}>Moderately Played (MP)</option>
+                                <option value="HP" {% if card.condition == 'HP' %}selected{% endif %}>Heavily Played (HP)</option>
+                                <option value="DMG" {% if card.condition == 'DMG' %}selected{% endif %}>Damaged (DMG)</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-bold text-uppercase">Binder / Location</label>
+                            <input type="text" name="location" class="form-control" value="{{ card.location or '' }}" placeholder="e.g. Box 3">
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg fw-bold shadow-sm">Save Changes</button>
+                    </div>
                 </form>
-                <form action="{{ url_for('update_card', id=card.id) }}" method="POST" onsubmit="return confirm('Delete?')">
+
+                <hr class="my-4 border-secondary">
+
+                <form action="{{ url_for('update_card', id=card.id) }}" method="POST" onsubmit="return confirm('Are you absolutely sure you want to delete this card from your inventory?');">
                     <input type="hidden" name="action" value="delete">
-                    <button class="btn btn-outline-danger w-100">Delete Card</button>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-outline-danger">🗑️ Delete Card</button>
+                    </div>
                 </form>
             </div>
         </div>
