@@ -122,34 +122,41 @@ document.addEventListener('DOMContentLoaded', function() {
         clearTimeout(debounceTimer);
         activeResultIndex = -1;
         
-        if (this.value.length < 3) { 
+        // Safely capture the input value to prevent scope loss
+        const query = this.value; 
+        
+        if (query.length < 3) { 
             resultsDiv.innerHTML = '<div class="text-center text-muted mt-5">Ready for next customer.</div>'; 
             return; 
         }
         
         debounceTimer = setTimeout(() => {
-            fetch(`/api/pos_search?q=${encodeURIComponent(this.value)}`)
-                .then(r => r.json())
+            fetch(`/api/pos_search?q=${encodeURIComponent(query)}`)
+                .then(r => {
+                    if (!r.ok) throw new Error('Network response failed');
+                    return r.json();
+                })
                 .then(data => {
                     resultsDiv.innerHTML = '';
                     
                     // Render Inventory Items (SELL ONLY)
-                    if (data.inventory.length > 0) {
+                    if (data.inventory && data.inventory.length > 0) {
                         resultsDiv.innerHTML += `<div class="bg-success text-white px-3 py-1 fw-bold small text-uppercase position-sticky top-0" style="z-index: 5;">📦 In Stock (Ready to Sell)</div>`;
                         
-                        data.inventory.forEach((item, index) => {
+                        data.inventory.forEach((item) => {
                             const div = document.createElement('div');
                             div.className = 'list-group-item list-group-item-action bg-dark text-white border-secondary search-hit p-3';
                             
+                            // CRITICAL FIX: Escape single quotes in names (e.g. Farfetch'd)
+                            const safeName = item.name.replace(/'/g, "\\'");
+                            
                             let actionHtml = '';
                             if (item.variants.length === 1) {
-                                // Safe Assumption: Only 1 condition type exists for this card
                                 const v = item.variants[0];
-                                actionHtml = `<button class="btn btn-outline-danger w-100 sell-btn" onclick="cartAction('add_out', '${v.id}', '${item.name} (${v.condition})', ${v.price}, event)">SELL ${v.condition} ($${v.price.toFixed(2)})</button>`;
+                                actionHtml = `<button class="btn btn-outline-danger w-100 sell-btn" onclick="cartAction('add_out', '${v.id}', '${safeName} (${v.condition})', ${v.price}, event)">SELL ${v.condition} ($${v.price.toFixed(2)})</button>`;
                             } else {
-                                // Multiple conditions exist: Render a row of choices
                                 let buttons = item.variants.map(v => 
-                                    `<button class="btn btn-outline-danger flex-grow-1 sell-btn" onclick="cartAction('add_out', '${v.id}', '${item.name} (${v.condition})', ${v.price}, event)">${v.condition} ($${v.price.toFixed(2)})</button>`
+                                    `<button class="btn btn-outline-danger flex-grow-1 sell-btn" onclick="cartAction('add_out', '${v.id}', '${safeName} (${v.condition})', ${v.price}, event)">${v.condition} ($${v.price.toFixed(2)})</button>`
                                 ).join('');
                                 
                                 actionHtml = `
@@ -172,14 +179,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
 
                     // Render Dictionary Items (TRADE IN ONLY)
-                    if (data.dictionary.length > 0) {
+                    if (data.dictionary && data.dictionary.length > 0) {
                         resultsDiv.innerHTML += `<div class="bg-primary text-white px-3 py-1 mt-2 fw-bold small text-uppercase position-sticky top-0" style="z-index: 5;">📖 Master Dictionary (Take on Trade)</div>`;
                         
-                        data.dictionary.forEach((item, index) => {
+                        data.dictionary.forEach((item) => {
                             const div = document.createElement('div');
                             div.className = 'list-group-item list-group-item-action bg-dark text-white border-secondary search-hit p-3 opacity-75';
-                            // Hardcoded demo price for dictionary items since API doesn't store active pricing in cache yet
+                            
                             const simulatedPrice = (Math.random() * 50).toFixed(2); 
+                            const safeName = item.name.replace(/'/g, "\\'");
                             
                             div.innerHTML = `
                                 <div class="d-flex justify-content-between align-items-center">
@@ -190,16 +198,20 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <div class="fs-5 fw-bold text-primary">$${simulatedPrice}</div>
                                 </div>
                                 <div class="mt-2">
-                                    <button class="btn btn-outline-primary w-100" onclick="cartAction('add_in', '${item.id}', '${item.name}', ${simulatedPrice}, event)">TAKE (In)</button>
+                                    <button class="btn btn-outline-primary w-100" onclick="cartAction('add_in', '${item.id}', '${safeName}', ${simulatedPrice}, event)">TAKE (In)</button>
                                 </div>
                             `;
                             resultsDiv.appendChild(div);
                         });
                     }
                     
-                    if (data.inventory.length === 0 && data.dictionary.length === 0) {
+                    if ((!data.inventory || data.inventory.length === 0) && (!data.dictionary || data.dictionary.length === 0)) {
                         resultsDiv.innerHTML = '<div class="text-center text-muted p-4">No results found.</div>';
                     }
+                })
+                .catch(error => {
+                    console.error('POS Search Error:', error);
+                    resultsDiv.innerHTML = '<div class="text-center text-danger p-4 fw-bold">Error fetching results. Check server console.</div>';
                 });
         }, 250);
     });

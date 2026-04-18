@@ -441,65 +441,77 @@ def sync_db():
 @app.route('/api/pos_search')
 @login_required
 def pos_search():
-    query = request.args.get('q', '').lower().strip()
-    if len(query) < 2: 
-        return jsonify({'inventory': [], 'dictionary': []})
-    
-    terms = query.split()
-    
-    # 1. Search User's Inventory (For Selling Out)
-    inv_filters = [Card.user_id == current_user.id, Card.quantity > 0]
-    for term in terms:
-        inv_filters.append(db.or_(Card.card_name.ilike(f'%{term}%'), Card.set_name.ilike(f'%{term}%')))
-    
-    inv_results = Card.query.filter(db.and_(*inv_filters)).limit(30).all()
-    
-    # Group physical inventory by the card's identity
-    grouped_inv = {}
-    for c in inv_results:
-        key = f"{c.card_name}_{c.set_name}_{c.finish}"
-        if key not in grouped_inv:
-            grouped_inv[key] = {
-                'name': c.card_name,
-                'set': c.set_name,
-                'number': c.card_number,
-                'finish': c.finish,
-                'image': c.image_url,
-                'total_qty': 0,
-                'variants': []
-            }
+    try:
+        query = request.args.get('q', '').lower().strip()
+        if len(query) < 2: 
+            return jsonify({'inventory': [], 'dictionary': []})
         
-        grouped_inv[key]['total_qty'] += c.quantity
+        terms = query.split()
         
-        # Handle Graded slabs gracefully in the condition string
-        cond_str = c.condition
-        if c.grading_company and c.grade:
-            cond_str = f"{c.grading_company} {c.grade}"
+        # 1. Search User's Inventory
+        inv_filters = [Card.user_id == current_user.id, Card.quantity > 0]
+        for term in terms:
+            inv_filters.append(db.or_(Card.card_name.ilike(f'%{term}%'), Card.set_name.ilike(f'%{term}%')))
+        
+        inv_results = Card.query.filter(db.and_(*inv_filters)).limit(30).all()
+        
+        grouped_inv = {}
+        for c in inv_results:
+            # SAFEGUARDS: Prevent Null values from crashing the loop
+            c_name = c.card_name or "Unknown"
+            c_set = c.set_name or "Unknown"
+            c_finish = c.finish or "Normal"
+            c_qty = c.quantity or 0
+            c_price = c.price or 0.0
+            c_cond = c.condition or "NM"
             
-        grouped_inv[key]['variants'].append({
-            'id': c.id,
-            'condition': cond_str,
-            'price': c.price,
-            'qty': c.quantity
-        })
+            key = f"{c_name}_{c_set}_{c_finish}"
+            if key not in grouped_inv:
+                grouped_inv[key] = {
+                    'name': c_name,
+                    'set': c_set,
+                    'number': c.card_number or "",
+                    'finish': c_finish,
+                    'image': c.image_url or "",
+                    'total_qty': 0,
+                    'variants': []
+                }
+            
+            grouped_inv[key]['total_qty'] += c_qty
+            
+            cond_str = c_cond
+            if c.grading_company and c.grade:
+                cond_str = f"{c.grading_company} {c.grade}"
+                
+            grouped_inv[key]['variants'].append({
+                'id': c.id,
+                'condition': cond_str,
+                'price': float(c_price),
+                'qty': c_qty
+            })
+            
+        inv_data = list(grouped_inv.values())
         
-    inv_data = list(grouped_inv.values())
-    
-    # 2. Search Master Dictionary (For Taking Trades In)
-    dict_filters = []
-    for term in terms:
-        dict_filters.append(db.or_(CardReference.name.ilike(f'%{term}%'), CardReference.set_name.ilike(f'%{term}%')))
+        # 2. Search Master Dictionary
+        dict_filters = []
+        for term in terms:
+            dict_filters.append(db.or_(CardReference.name.ilike(f'%{term}%'), CardReference.set_name.ilike(f'%{term}%')))
+            
+        dict_results = CardReference.query.filter(db.and_(*dict_filters)).order_by(CardReference.release_date.desc()).limit(15).all()
+        dict_data = [{
+            'id': r.id,
+            'name': r.name or "Unknown",
+            'set': r.set_name or "Unknown",
+            'number': r.number or "",
+            'image': r.image_url or ""
+        } for r in dict_results]
         
-    dict_results = CardReference.query.filter(db.and_(*dict_filters)).order_by(CardReference.release_date.desc()).limit(15).all()
-    dict_data = [{
-        'id': r.id,             # API ID
-        'name': r.name,
-        'set': r.set_name,
-        'number': r.number,
-        'image': r.image_url
-    } for r in dict_results]
-    
-    return jsonify({'inventory': inv_data, 'dictionary': dict_data})
+        return jsonify({'inventory': inv_data, 'dictionary': dict_data})
+        
+    except Exception as e:
+        # If it crashes, log it and return empty data so the UI doesn't freeze
+        print(f"POS Search Crash: {str(e)}")
+        return jsonify({'inventory': [], 'dictionary': []})
 
 @app.route('/admin/update_price/<int:card_id>', methods=['POST'])
 @login_required
