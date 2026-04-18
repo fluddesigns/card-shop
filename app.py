@@ -149,6 +149,37 @@ def get_user_settings(user_id):
         db.session.commit()
     return settings
 
+# --- Helper Functions CONT.---
+
+def get_clean_finishes(tcgplayer_data):
+    """Parses TCGPlayer pricing tiers to determine available card variants."""
+    if not tcgplayer_data or 'prices' not in tcgplayer_data:
+        return "Normal"
+    
+    raw_finishes = tcgplayer_data['prices'].keys()
+    clean_finishes = []
+    
+    for f in raw_finishes:
+        f_lower = f.lower()
+        if f_lower == 'normal': 
+            clean_finishes.append('Normal')
+        elif f_lower == 'holofoil': 
+            clean_finishes.append('Holo')
+        elif f_lower == 'reverseholofoil': 
+            clean_finishes.append('Reverse Holo')
+        elif f_lower == '1steditionholofoil': 
+            clean_finishes.append('1st Edition Holo')
+        elif f_lower == '1steditionnormal' or f_lower == '1stedition': 
+            clean_finishes.append('1st Edition')
+        elif f_lower == 'unlimitedholofoil': 
+            clean_finishes.append('Unlimited Holo')
+        else: 
+            # Fallback for unexpected finishes: split CamelCase
+            cleaned = re.sub('([A-Z])', r' \1', f).strip().title()
+            clean_finishes.append(cleaned)
+            
+    return ",".join(clean_finishes) if clean_finishes else "Normal"
+
 # --- Routes ---
 
 @app.route('/')
@@ -349,6 +380,9 @@ def sync_db():
                                 set_id=item['set']['id'],
                                 number=item['number'],
                                 image_url=item['images']['small'] if 'images' in item else None,
+                                # NEW: Capture release date and available finishes
+                                release_date=item.get('set', {}).get('releaseDate'),
+                                available_finishes=get_clean_finishes(item.get('tcgplayer'))
                             )
                             db.session.add(ref)
                             count += 1
@@ -1177,7 +1211,7 @@ def force_api_fetch():
             number=api_data.get('number'),
             image_url=images.get('large') or images.get('small'),
             release_date=api_data.get('set', {}).get('releaseDate'),
-            available_finishes=get_clean_finishes(api_data.get('tcgplayer')),
+            available_finishes=get_clean_finishes(api_data.get('tcgplayer')), # Uses local helper
             is_favorite=True # Automatically track it
         )
         db.session.add(new_ref)
