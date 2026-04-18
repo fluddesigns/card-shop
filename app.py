@@ -452,17 +452,38 @@ def pos_search():
     for term in terms:
         inv_filters.append(db.or_(Card.card_name.ilike(f'%{term}%'), Card.set_name.ilike(f'%{term}%')))
     
-    inv_results = Card.query.filter(db.and_(*inv_filters)).limit(15).all()
-    inv_data = [{
-        'id': c.id,             # Internal DB ID (Crucial for deducting qty later)
-        'name': c.card_name,
-        'set': c.set_name,
-        'number': c.card_number,
-        'finish': c.finish,
-        'price': c.price,
-        'qty': c.quantity,
-        'image': c.image_url
-    } for c in inv_results]
+    inv_results = Card.query.filter(db.and_(*inv_filters)).limit(30).all()
+    
+    # Group physical inventory by the card's identity
+    grouped_inv = {}
+    for c in inv_results:
+        key = f"{c.card_name}_{c.set_name}_{c.finish}"
+        if key not in grouped_inv:
+            grouped_inv[key] = {
+                'name': c.card_name,
+                'set': c.set_name,
+                'number': c.card_number,
+                'finish': c.finish,
+                'image': c.image_url,
+                'total_qty': 0,
+                'variants': []
+            }
+        
+        grouped_inv[key]['total_qty'] += c.quantity
+        
+        # Handle Graded slabs gracefully in the condition string
+        cond_str = c.condition
+        if c.grading_company and c.grade:
+            cond_str = f"{c.grading_company} {c.grade}"
+            
+        grouped_inv[key]['variants'].append({
+            'id': c.id,
+            'condition': cond_str,
+            'price': c.price,
+            'qty': c.quantity
+        })
+        
+    inv_data = list(grouped_inv.values())
     
     # 2. Search Master Dictionary (For Taking Trades In)
     dict_filters = []
