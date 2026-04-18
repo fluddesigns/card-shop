@@ -357,38 +357,69 @@ def sync_db():
         return redirect(url_for('admin'))
     
     try:
-                        c_id = item['id']
+        api_url = "https://api.pokemontcg.io/v2/cards"
+        params = {'pageSize': 250} 
+        headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
+        
+        r = requests.get(api_url, params=params, headers=headers, timeout=30, verify=False)
+        
+        if r.status_code == 200:
+            data = r.json()
+            count = 0
+            if 'data' in data:
+                for item in data['data']:
+                    try:
+                        c_id = item.get('id')
+                        if not c_id: continue
+                        
                         exists = CardReference.query.get(c_id)
                         
-                        # Get the fresh data using our new helper
+                        # Safely extract set data
+                        card_set = item.get('set') or {}
+                        fresh_release = card_set.get('releaseDate')
                         fresh_finishes = get_clean_finishes(item.get('tcgplayer'))
-                        fresh_release = item.get('set', {}).get('releaseDate')
-
+                        images = item.get('images') or {}
+                        
                         if not exists:
-                            # 1. ADD NEW CARDS
+                            # Insert New Card
                             ref = CardReference(
                                 id=c_id,
-                                name=item['name'],
-                                set_name=item['set']['name'],
-                                set_id=item['set']['id'],
-                                number=item['number'],
-                                image_url=item['images']['small'] if 'images' in item else None,
+                                name=item.get('name', 'Unknown'),
+                                set_name=card_set.get('name', 'Unknown'),
+                                set_id=card_set.get('id'),
+                                number=item.get('number', ''),
+                                image_url=images.get('small'),
                                 release_date=fresh_release,
                                 available_finishes=fresh_finishes
                             )
                             db.session.add(ref)
                             count += 1
                         else:
-                            # 2. THE FIX: UPDATE EXISTING CARDS!
-                            # If the existing card is stuck on the default "Normal", update it.
-                            if exists.available_finishes != fresh_finishes or not exists.release_date:
+                            # Update Existing Card
+                            updated = False
+                            if exists.available_finishes != fresh_finishes:
                                 exists.available_finishes = fresh_finishes
+                                updated = True
+                            if not exists.release_date and fresh_release:
                                 exists.release_date = fresh_release
-                                count += 1 # Count it as successfully synced/updated
+                                updated = True
+                                
+                            if updated:
+                                count += 1
                                 
                     except Exception as e:
                         print(f"CRASH ON CARD {item.get('id')}: {str(e)}", flush=True)
                         continue
+                
+                db.session.commit()
+                flash(f"Synced/Updated {count} cards in reference cache.")
+            else:
+                flash("Sync Failed: Invalid data format from API.")
+        else:
+            flash(f"Sync Failed: API Error {r.status_code}")
+            
+    except Exception as e:
+        flash(f"Sync Error: {str(e)}")
         
     return redirect(url_for('admin'))
 
@@ -1172,42 +1203,40 @@ def hunt_mode(species):
 @app.route('/api/force_api_fetch', methods=['POST'])
 @login_required
 def force_api_fetch():
-    api_id = request.form.get('api_id').strip()
+    api_id = request.form.get('api_id')
     if not api_id:
         return redirect(url_for('admin'))
+    
+    api_id = api_id.strip()
 
-    # Ping the API for this specific ID
     url = f"https://api.pokemontcg.io/v2/cards/{api_id}"
     response = requests.get(url)
     
     if response.status_code == 200:
-        api_data = response.json().get('data')
+        api_data = response.json().get('data', {})
         
-        # Check if we already have it
         existing = CardReference.query.get(api_id)
         if existing:
             flash(f"ℹ️ {api_id} already exists in your local dictionary.")
             return redirect(url_for('admin'))
 
-        # Inject the new card
         images = api_data.get('images', {})
-        # We reuse our variant cleaner from the deep_dive script
-        from deep_dive import get_clean_finishes 
+        card_set = api_data.get('set', {})
         
         new_ref = CardReference(
-            id=api_data['id'],
-            name=api_data['name'],
-            set_name=api_data.get('set', {}).get('name'),
-            set_id=api_data.get('set', {}).get('id'),
+            id=api_data.get('id'),
+            name=api_data.get('name'),
+            set_name=card_set.get('name'),
+            set_id=card_set.get('id'),
             number=api_data.get('number'),
             image_url=images.get('large') or images.get('small'),
-            release_date=api_data.get('set', {}).get('releaseDate'),
-            available_finishes=get_clean_finishes(api_data.get('tcgplayer')), # Uses local helper
-            is_favorite=True # Automatically track it
+            release_date=card_set.get('releaseDate'),
+            available_finishes=get_clean_finishes(api_data.get('tcgplayer')),
+            is_favorite=True 
         )
         db.session.add(new_ref)
         db.session.commit()
-        flash(f"✅ Successfully injected {api_data['name']} ({api_id}) into your Pokedex!")
+        flash(f"✅ Successfully injected {api_data.get('name')} ({api_id}) into your Pokedex!")
     else:
         flash(f"❌ API could not find a card with ID: {api_id}")
         
