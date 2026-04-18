@@ -438,6 +438,48 @@ def sync_db():
         
     return redirect(url_for('admin'))
 
+@app.route('/api/pos_search')
+@login_required
+def pos_search():
+    query = request.args.get('q', '').lower().strip()
+    if len(query) < 2: 
+        return jsonify({'inventory': [], 'dictionary': []})
+    
+    terms = query.split()
+    
+    # 1. Search User's Inventory (For Selling Out)
+    inv_filters = [Card.user_id == current_user.id, Card.quantity > 0]
+    for term in terms:
+        inv_filters.append(db.or_(Card.card_name.ilike(f'%{term}%'), Card.set_name.ilike(f'%{term}%')))
+    
+    inv_results = Card.query.filter(db.and_(*inv_filters)).limit(15).all()
+    inv_data = [{
+        'id': c.id,             # Internal DB ID (Crucial for deducting qty later)
+        'name': c.card_name,
+        'set': c.set_name,
+        'number': c.card_number,
+        'finish': c.finish,
+        'price': c.price,
+        'qty': c.quantity,
+        'image': c.image_url
+    } for c in inv_results]
+    
+    # 2. Search Master Dictionary (For Taking Trades In)
+    dict_filters = []
+    for term in terms:
+        dict_filters.append(db.or_(CardReference.name.ilike(f'%{term}%'), CardReference.set_name.ilike(f'%{term}%')))
+        
+    dict_results = CardReference.query.filter(db.and_(*dict_filters)).order_by(CardReference.release_date.desc()).limit(15).all()
+    dict_data = [{
+        'id': r.id,             # API ID
+        'name': r.name,
+        'set': r.set_name,
+        'number': r.number,
+        'image': r.image_url
+    } for r in dict_results]
+    
+    return jsonify({'inventory': inv_data, 'dictionary': dict_data})
+
 @app.route('/admin/update_price/<int:card_id>', methods=['POST'])
 @login_required
 def update_single_price(card_id):
