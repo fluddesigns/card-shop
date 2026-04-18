@@ -1242,5 +1242,62 @@ def force_api_fetch():
         
     return redirect(url_for('admin'))
 
+# Add this near your other routes in app.py
+
+@app.route('/pos')
+@login_required
+def point_of_sale():
+    # Initialize a fresh POS cart in the session
+    if 'pos_cart' not in session:
+        session['pos_cart'] = {'in': [], 'out': [], 'net': 0.0}
+    return render_template('pos.html')
+
+@app.route('/api/pos/action', methods=['POST'])
+@login_required
+def pos_action():
+    """Handles all rapid AJAX requests for the POS."""
+    if 'pos_cart' not in session:
+        session['pos_cart'] = {'in': [], 'out': [], 'net': 0.0}
+        
+    action = request.json.get('action')
+    data = request.json.get('data', {})
+    
+    # Calculate current net (Out - In)
+    def update_net():
+        total_out = sum(item['price'] for item in session['pos_cart']['out'])
+        total_in = sum(item['price'] for item in session['pos_cart']['in'])
+        session['pos_cart']['net'] = total_out - total_in
+
+    if action == 'add_out':
+        # Selling a card from inventory
+        session['pos_cart']['out'].append({
+            'id': data.get('id'), 
+            'name': data.get('name'), 
+            'price': float(data.get('price', 0))
+        })
+    elif action == 'add_in':
+        # Taking a card/item in on trade
+        base_price = float(data.get('price', 0))
+        multiplier = float(data.get('multiplier', 1.0))
+        final_credit = base_price * multiplier
+        
+        session['pos_cart']['in'].append({
+            'name': data.get('name'), 
+            'price': final_credit,
+            'base_price': base_price,
+            'multiplier': multiplier
+        })
+    elif action == 'clear':
+        session['pos_cart'] = {'in': [], 'out': [], 'net': 0.0}
+        
+    update_net()
+    session.modified = True
+    
+    return jsonify({
+        'status': 'success',
+        'cart': session['pos_cart']
+    })
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
