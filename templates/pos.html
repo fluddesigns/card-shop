@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ).join('');
     }
 
-    // --- 3. BLUETOOTH KEYBOARD NINJA MODE ---
+// --- 3. BLUETOOTH KEYBOARD NINJA MODE ---
     document.addEventListener('keydown', function(e) {
         // Press "/" to focus search immediately
         if (e.key === '/' && document.activeElement !== searchInput) {
@@ -315,12 +315,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (takeBtn) takeBtn.click();
                 } else { 
                     // Enter = Sell Out (Inventory Search)
-                    // If multiple conditions exist, hitting Enter safely assumes the first one in the list.
                     const sellBtn = hit.querySelector('.btn-outline-danger');
                     if (sellBtn) sellBtn.click();
                 }           
             }
+        } else if (e.key === 'Escape') {
+            searchInput.value = '';
+            resultsDiv.innerHTML = '';
+            searchInput.focus();
         }
+    }); // This closing brace was missing
 
     function highlightResult(hits) {
         hits.forEach(h => h.classList.remove('active-hit'));
@@ -329,6 +333,6 @@ document.addEventListener('DOMContentLoaded', function() {
             hits[activeResultIndex].scrollIntoView({block: "nearest"});
         }
     }
-});
+}); // Closes DOMContentLoaded
 </script>
 {% endblock %}
