@@ -334,14 +334,29 @@ def api_inventory(username):
 @app.route('/api/search_reference')
 @login_required
 def search_reference():
-    query = request.args.get('q', '').lower()
+    query = request.args.get('q', '').lower().strip()
     if len(query) < 2: return jsonify([])
     
-    results = CardReference.query.filter(CardReference.name.ilike(f'%{query}%')).limit(20).all()
+    # Split the search query into individual words
+    terms = query.split()
+    
+    # Require EVERY word to appear in either the card name OR the set name
+    filters = []
+    for term in terms:
+        filters.append(
+            db.or_(
+                CardReference.name.ilike(f'%{term}%'),
+                CardReference.set_name.ilike(f'%{term}%')
+            )
+        )
+    
+    # Query using db.and_ to enforce all filters, order by newest releases first
+    results = CardReference.query.filter(db.and_(*filters)).order_by(CardReference.release_date.desc()).limit(20).all()
     
     data = []
     for card in results:
         data.append({
+            'id': card.id,
             'name': card.name,
             'set': card.set_name,
             'number': card.number,

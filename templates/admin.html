@@ -443,16 +443,33 @@ document.addEventListener('DOMContentLoaded', function() {
     Array.from(uniqueSets).sort().forEach(s => filterSet.add(new Option(s, s)));
 
     function applyFilters() {
-        const sVal = adminSearch.value.toLowerCase(), gVal = filterGame.value, setVal = filterSet.value;
+        const sVal = adminSearch.value.toLowerCase().trim();
+        const searchTerms = sVal.split(' ').filter(t => t !== ''); // Split into array of words
+        const gVal = filterGame.value;
+        const setVal = filterSet.value;
+        
         let vCount = 0;
         rows.forEach(row => {
-            const match = (row.dataset.name + " " + row.dataset.set).toLowerCase().includes(sVal) &&
+            const rowText = (row.dataset.name + " " + row.dataset.set).toLowerCase();
+            
+            // The row must include EVERY typed word to be considered a match
+            const matchesText = searchTerms.every(term => rowText.includes(term));
+            
+            const match = matchesText &&
                           (gVal === "" || row.dataset.game === gVal) &&
                           (setVal === "" || row.dataset.set === setVal);
-            if(match) { row.style.display = ''; vCount++; }
-            else { row.style.display = 'none'; const cb = row.querySelector('.card-checkbox'); if(cb) cb.checked = false; }
+                          
+            if(match) { 
+                row.style.display = ''; 
+                vCount++; 
+            } else { 
+                row.style.display = 'none'; 
+                const cb = row.querySelector('.card-checkbox'); 
+                if(cb) cb.checked = false; 
+            }
         });
-        visibleCountEl.innerText = vCount; updateBulk();
+        visibleCountEl.innerText = vCount; 
+        updateBulk();
     }
 
     [adminSearch, filterGame, filterSet].forEach(el => { if(el) el.addEventListener('input', applyFilters); });
