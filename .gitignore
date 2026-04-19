@@ -12,3 +12,5 @@ __pycache__/
 
 # System junk
 .DS_Store
+flask_session/
+instance/
