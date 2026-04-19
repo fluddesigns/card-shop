@@ -3,23 +3,23 @@
 
 {% block content %}
 <div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div>
-            <a href="{{ url_for('pokedex_hub') }}" class="text-decoration-none text-muted mb-1 d-block">&larr; Back to Hub</a>
+            <a href="{{ url_for('pokedex_hub') }}" class="text-decoration-none text-muted mb-2 d-inline-block">&larr; Back to Hub</a>
             <h1 class="fw-bold mb-0">📕 {{ species }} Collection</h1>
         </div>
-        <a href="{{ url_for('hunt_mode', species=species) }}" class="btn btn-danger btn-lg fw-bold shadow-sm">🎯 HUNT MODE</a>
+        <a href="{{ url_for('hunt_mode', species=species) }}" class="btn btn-danger btn-lg fw-bold shadow-sm w-100 text-center" style="max-width: 300px;">🎯 HUNT MODE</a>
     </div>
 
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-4">
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-4">
         {% for ref in master_cards %}
             <div class="col">
                 <div class="card h-100 border-0 shadow-sm bg-dark text-white">
-                    <img src="{{ ref.image_url }}" class="card-img-top p-2" style="border-radius: 15px;">
-                    <div class="card-body text-center pt-1">
-                        <p class="text-muted small mb-1 fw-bold">{{ ref.set_name }} (#{{ ref.number }})</p>
+                    <img src="{{ ref.image_url }}" class="card-img-top p-2 img-fluid mx-auto" style="border-radius: 15px; max-height: 350px; object-fit: contain;">
+                    <div class="card-body text-center pt-2">
+                        <p class="text-muted small mb-2 fw-bold">{{ ref.set_name }} (#{{ ref.number }})</p>
                         
-                        <div class="d-flex flex-wrap justify-content-center gap-1 mt-2">
+                        <div class="d-flex flex-wrap justify-content-center gap-2">
                             {% for finish in ref.available_finishes.split(',') %}
                                 {% set ns = namespace(owned=false) %}
                                 {% for oc in owned_dict.get(ref.id, []) %}
@@ -27,14 +27,14 @@
                                 {% endfor %}
 
                                 {% if ns.owned %}
-                                    <span class="badge shadow-sm bg-success" style="font-size: 0.7rem;">
+                                    <span class="badge shadow-sm bg-success py-2 px-3" style="font-size: 0.75rem;">
                                         ✅ {{ finish.strip() }}
                                     </span>
                                 {% else %}
                                     <form action="{{ url_for('quick_capture') }}" method="POST" class="m-0 p-0 quick-capture-form">
                                         <input type="hidden" name="reference_id" value="{{ ref.id }}">
                                         <input type="hidden" name="finish" value="{{ finish.strip() }}">
-                                        <button type="submit" class="badge shadow-sm bg-dark border border-secondary text-secondary" style="font-size: 0.7rem; cursor: pointer;" title="Click to add to inventory!">
+                                        <button type="submit" class="badge shadow-sm bg-dark border border-secondary text-secondary py-2 px-3" style="font-size: 0.75rem; cursor: pointer;" title="Click to add to inventory!">
                                             ❌ {{ finish.strip() }}
                                         </button>
                                     </form>
@@ -54,13 +54,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     captureForms.forEach(form => {
         form.addEventListener('submit', async function(e) {
-            e.preventDefault(); // Stop the page from reloading!
+            e.preventDefault();
 
             const btn = form.querySelector('button');
             const originalText = btn.innerHTML;
             const finishName = form.querySelector('input[name="finish"]').value;
             
-            // Visual feedback that it's thinking
             btn.innerHTML = '⏳ Saving...';
             btn.disabled = true;
 
@@ -69,18 +68,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'POST',
                     body: new FormData(form),
                     headers: {
-                        'X-Requested-With': 'XMLHttpRequest' // Tells Flask to send JSON
+                        'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
 
                 if (response.ok) {
-                    // Success! Morph the button into the green ✅ pill
                     btn.classList.remove('bg-dark', 'border', 'border-secondary', 'text-secondary');
                     btn.classList.add('bg-success', 'text-white');
                     btn.innerHTML = `✅ ${finishName}`;
                     btn.style.cursor = 'default';
                 } else {
-                    // If something went wrong, revert it
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                     alert("Failed to capture card. Please try again.");
