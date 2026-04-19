@@ -19,7 +19,7 @@ services:
       - FROM_EMAIL=admin@fludmedia.com
       - ADMIN_EMAIL=blakeflud@gmail.com
 
-    web_staging:
+  web_staging:
     build: .
     container_name: card_inventory_staging
     restart: unless-stopped
