@@ -26,7 +26,7 @@ services:
     ports:
       - "8008:5000"  # This maps port 8080 on the server to the app
     volumes:
-      - ./instance:/app/instance
+      - ./instance:/app/instance_dev
     environment:
       - DB_NAME=inventory_dev.db  # Use the test copy!
       - FLASK_APP=app.py
