@@ -41,7 +41,7 @@
                     </div>
 
                     <div class="mt-auto d-flex flex-column flex-sm-row gap-2">
-                        <a href="{{ url_for('pokedex_binder', species=stat.name) }}" class="btn btn-sm btn-outline-dark w-100 d-flex align-items-center justify-content-center">📖 View Binder</a>
+                        <a href="{{ url_for('pokedex_binder', species=stat.name) }}" class="btn btn-sm btn-primary w-100 d-flex align-items-center justify-content-center">📖 View Binder</a>
                         <a href="{{ url_for('hunt_mode', species=species|default(stat.name)) }}" class="btn btn-danger btn-sm fw-bold shadow-sm w-100 d-flex align-items-center justify-content-center">🎯 HUNT MODE</a>
                     </div>
                 </div>
