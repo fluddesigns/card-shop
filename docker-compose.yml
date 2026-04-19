@@ -39,6 +39,7 @@ services:
       - SMTP_PASS=BAF2025Winry!
       - FROM_EMAIL=admin@fludmedia.com
       - ADMIN_EMAIL=blakeflud@gmail.com
+    command: flask run --host=0.0.0.0 --port=5000
 
   tunnel:
     image: cloudflare/cloudflared:latest
