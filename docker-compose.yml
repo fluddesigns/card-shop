@@ -19,6 +19,26 @@ services:
       - FROM_EMAIL=admin@fludmedia.com
       - ADMIN_EMAIL=blakeflud@gmail.com
 
+    web_staging:
+    build: .
+    container_name: card_inventory_staging
+    restart: unless-stopped
+    ports:
+      - "8008:5000"  # This maps port 8080 on the server to the app
+    volumes:
+      - ./instance:/app/instance
+    environment:
+      - DB_NAME=inventory_dev.db  # Use the test copy!
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=1             # Enable debug mode for dev work
+      - SECRET_KEY=super_secret_key_for_session_security
+      - SMTP_HOST=mail.smtp2go.com
+      - SMTP_PORT=2525
+      - SMTP_USER=fludmedia.com
+      - SMTP_PASS=BAF2025Winry!
+      - FROM_EMAIL=admin@fludmedia.com
+      - ADMIN_EMAIL=blakeflud@gmail.com
+
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: card_inventory_tunnel
