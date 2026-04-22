@@ -1,45 +1,38 @@
 version: '3.8'
 
 services:
+  # --- PRODUCTION ENVIRONMENT ---
+  db:
+    image: postgres:15-alpine
+    container_name: card_inventory_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tcg_admin
+      POSTGRES_PASSWORD: ChangeThisProdPassword!
+      POSTGRES_DB: tcg_prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   web:
     build: .
     container_name: card_inventory_app
     restart: unless-stopped
+    depends_on:
+      - db
     volumes:
       - ./instance:/app/instance
+      - ./images:/app/static/images  # Added for your local WebP image proxy
     environment:
+      - DATABASE_URL=postgresql://tcg_admin:ChangeThisProdPassword!@db:5432/tcg_prod
       - FLASK_APP=app.py
       - FLASK_DEBUG=0
       - SECRET_KEY=super_secret_key_for_session_security
-      # Note: ADMIN_PASSWORD is no longer needed as we use database users now
       - SMTP_HOST=mail.smtp2go.com
       - SMTP_PORT=2525
       - SMTP_USER=fludmedia.com
       - SMTP_PASS=BAF2025Winry!
       - FROM_EMAIL=admin@fludmedia.com
       - ADMIN_EMAIL=blakeflud@gmail.com
-
-  web_staging:
-    build: .
-    container_name: card_inventory_staging
-    restart: unless-stopped
-    ports:
-      - "8008:5000"  # This maps port 8080 on the server to the app
-    volumes:
-      - .:/app
-      - ./instance:/app/instance_dev
-    environment:
-      - DB_NAME=inventory_dev.db  # Use the test copy!
-      - FLASK_APP=app.py
-      - FLASK_DEBUG=1             # Enable debug mode for dev work
-      - SECRET_KEY=super_secret_key_for_session_security
-      - SMTP_HOST=mail.smtp2go.com
-      - SMTP_PORT=2525
-      - SMTP_USER=fludmedia.com
-      - SMTP_PASS=BAF2025Winry!
-      - FROM_EMAIL=admin@fludmedia.com
-      - ADMIN_EMAIL=blakeflud@gmail.com
-    command: flask run --host=0.0.0.0 --port=5000
 
   tunnel:
     image: cloudflare/cloudflared:latest
@@ -50,3 +43,45 @@ services:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     depends_on:
       - web
+
+  # --- STAGING ENVIRONMENT ---
+  db_staging:
+    image: postgres:15-alpine
+    container_name: card_inventory_db_staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tcg_admin
+      POSTGRES_PASSWORD: ChangeThisStagingPassword!
+      POSTGRES_DB: tcg_staging
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+
+  web_staging:
+    build: .
+    container_name: card_inventory_staging
+    restart: unless-stopped
+    depends_on:
+      - db_staging
+    ports:
+      - "8008:5000"  # Maps port 8008 on the server to the app
+    volumes:
+      - .:/app
+      - ./instance:/app/instance_dev
+      - ./images:/app/static/images  # Both containers can read from your master image folder
+    environment:
+      - DATABASE_URL=postgresql://tcg_admin:ChangeThisStagingPassword!@db_staging:5432/tcg_staging
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=1
+      - SECRET_KEY=super_secret_key_for_session_security
+      - SMTP_HOST=mail.smtp2go.com
+      - SMTP_PORT=2525
+      - SMTP_USER=fludmedia.com
+      - SMTP_PASS=BAF2025Winry!
+      - FROM_EMAIL=admin@fludmedia.com
+      - ADMIN_EMAIL=blakeflud@gmail.com
+    command: flask run --host=0.0.0.0 --port=5000
+
+# --- NAMED VOLUMES ---
+volumes:
+  postgres_data:
+  postgres_staging_data:

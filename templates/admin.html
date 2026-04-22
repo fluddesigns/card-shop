@@ -1,6 +1,94 @@
 ﻿{% extends "base.html" %}
 {% block title %}Admin Dashboard{% endblock %}
 
+{% block styles %}
+<style>
+    /* 📱 Mobile Responsive Table-to-Card Layout */
+    @media (max-width: 767.98px) {
+        #inventoryTable thead { display: none; }
+        
+        #inventoryTable tbody tr {
+            display: grid;
+            grid-template-columns: 35px 1fr auto;
+            grid-template-areas: 
+                "check name price"
+                "check qty expand"
+                "details details details"
+                "actions actions actions";
+            border-bottom: 1px solid var(--bs-border-color);
+            padding: 14px 8px;
+            align-items: start;
+            background: var(--bs-body-bg);
+            transition: background-color 0.2s, border-left 0.2s;
+            border-left: 4px solid transparent;
+            cursor: pointer; /* Suggests interactivity */
+        }
+        
+        #inventoryTable tbody tr.is-expanded {
+            background: var(--bs-tertiary-bg);
+            border-left: 4px solid var(--bs-primary);
+        }
+
+        #inventoryTable tbody td { border: none; padding: 4px 0; }
+        
+        #inventoryTable td:first-child { grid-area: check; align-self: center; }
+        
+        .col-name { grid-area: name; font-size: 1.1rem; padding-right: 10px !important; line-height: 1.2; }
+        .col-price { grid-area: price; text-align: right; font-size: 1.1rem; }
+        .col-qty { grid-area: qty; font-size: 0.9rem; color: var(--bs-secondary-color); margin-top: 4px; }
+        .col-qty::before { content: 'Qty: '; }
+        
+        /* Expand toggle chevron */
+        .col-expand { 
+            grid-area: expand; 
+            text-align: right; 
+            color: var(--bs-secondary-color); 
+            font-size: 0.9rem;
+            align-self: center;
+        }
+        .col-expand .expand-icon { transition: transform 0.3s ease; display: inline-block; }
+        tr.is-expanded .col-expand .expand-icon { transform: rotate(180deg); color: var(--bs-primary); }
+
+        /* Detail fields - Hidden in overview */
+        .col-number, .col-set, .col-game, .col-status, .col-finish, .col-cond, .col-slab, .col-loc, .col-updated {
+            display: none !important; /* Overrides inline JS toggles */
+            font-size: 0.85rem;
+            padding-left: 35px !important;
+            margin-bottom: 4px;
+        }
+        
+        /* Detail fields - Visible in drill-down */
+        tr.is-expanded .col-number, tr.is-expanded .col-set, tr.is-expanded .col-game, 
+        tr.is-expanded .col-status, tr.is-expanded .col-finish, tr.is-expanded .col-cond, 
+        tr.is-expanded .col-slab, tr.is-expanded .col-loc, tr.is-expanded .col-updated {
+            display: block !important;
+            grid-column: 1 / -1;
+        }
+
+        /* Detail Labels */
+        tr.is-expanded .col-number::before { content: 'Card #: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+        tr.is-expanded .col-set::before { content: 'Set: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+        tr.is-expanded .col-game::before { content: 'Game: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+        tr.is-expanded .col-status::before { content: 'Status: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+        tr.is-expanded .col-finish::before { content: 'Finish: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+        tr.is-expanded .col-cond::before { content: 'Cond: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+        tr.is-expanded .col-slab::before { content: 'Slab Info: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+        tr.is-expanded .col-loc::before { content: 'Location: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+        tr.is-expanded .col-updated::before { content: 'Updated: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
+
+        .col-actions {
+            grid-area: actions;
+            text-align: right;
+            border-top: 1px dashed var(--bs-border-color);
+            margin-top: 12px;
+            padding-top: 12px !important;
+            display: none !important;
+        }
+        tr.is-expanded .col-actions { display: block !important; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container py-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -9,14 +97,14 @@
             <h1 class="fw-bold mb-0">Inventory</h1>
         </div>
         
-        <div class="d-flex gap-2">
-            <button class="btn btn-outline-dark" data-bs-toggle="offcanvas" data-bs-target="#filterOffcanvas">
+        <div class="d-flex flex-wrap flex-md-nowrap gap-2">
+            <button class="btn btn-outline-dark flex-grow-1 flex-md-grow-0" data-bs-toggle="offcanvas" data-bs-target="#filterOffcanvas">
                 🔍 View & Filters
             </button>
-            <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#toolsModal">
-                ⚙️ Settings & Tools
+            <button class="btn btn-outline-secondary flex-grow-1 flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#toolsModal">
+                ⚙️ Tools
             </button>
-            <button class="btn btn-danger fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addCardsModal">
+            <button class="btn btn-danger fw-bold shadow-sm flex-grow-1 flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#addCardsModal">
                 ➕ Add Cards
             </button>
         </div>
@@ -60,20 +148,20 @@
                                 <th class="col-updated">Updated</th>
                                 <th class="col-qty">Qty</th>
                                 <th class="col-actions">Edit</th>
-                            </tr>
+                                <th class="col-expand d-md-none"></th> </tr>
                         </thead>
                         <tbody id="inventoryBody">
                             {% for card in inventory %}
-                            <tr class="inventory-row" data-id="{{ card.id }}" data-name="{{ card.card_name|lower }}" data-set="{{ card.set_name }}" data-game="{{ card.game }}" data-price="{{ card.price }}">
+                            <tr class="inventory-row" data-id="{{ card.id }}" data-name="{{ card.master_card.name|lower }}" data-set="{{ card.master_card.expansion_set.name }}" data-game="{{ card.game }}" data-price="{{ card.acquired_price }}">
                                 <td class="text-center"><input type="checkbox" class="form-check-input card-checkbox" name="card_ids" value="{{ card.id }}"></td>
                                 <td class="col-name">
-                                    <span class="fw-bold">{{ card.card_name }}</span>
+                                    <span class="fw-bold">{{ card.master_card.name }}</span>
                                     {% if card.is_first_edition %}
                                         <span class="badge bg-warning text-body border border-dark ms-1" style="font-size:0.6em;">1st Ed</span>
                                     {% endif %}
                                 </td>
                                 <td class="col-number"><small class="text-muted">{{ card.card_number or '-' }}</small></td>
-                                <td class="col-set"><small class="text-muted">{{ card.set_name }}</small></td>
+                                <td class="col-set"><small class="text-muted">{{ card.master_card.expansion_set.name }}</small></td>
                                 <td class="col-game"><small class="text-muted">{{ card.game }}</small></td>
                                 <td class="col-status"><span class="badge {% if card.status == 'Sales' %}bg-success{% else %}bg-secondary{% endif %}">{{ card.status }}</span></td>
                                 <td class="col-finish">{{ card.finish or 'Normal' }}</td>
@@ -87,14 +175,17 @@
                                     {% endif %}
                                 </td>
                                 <td class="col-loc">{{ card.location or '-' }}</td>
-                                <td class="col-price price-cell text-success fw-bold">${{ "%.2f"|format(card.price) }}</td>
+                                <td class="col-price price-cell text-success fw-bold">${{ "%.2f"|format(card.acquired_price) }}</td>
                                 <td class="col-updated date-cell text-muted small">
                                     {{ card.last_updated.strftime('%m-%d') if card.last_updated else '-' }}
                                 </td>
                                 <td class="col-qty">{{ card.quantity }}</td>
                                 <td class="col-actions">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal{{ card.id }}">✏️</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-bs-toggle="modal" data-bs-target="#editModal{{ card.id }}">
+                                        ✏️<span class="d-md-none ms-2">Edit Details</span>
+                                    </button>
                                 </td>
+                                <td class="col-expand d-md-none"><span class="expand-icon">▼</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -105,12 +196,14 @@
     </div>
     
     <div id="bulkActionBar" class="fixed-bottom bg-dark text-white p-3 shadow-lg d-none" style="z-index: 1040;">
-        <div class="container-fluid d-flex justify-content-between px-lg-5">
-            <div>
-                <span class="badge bg-primary me-2 fs-6"><span id="selectedCount">0</span> Selected</span> 
+        <div class="container-fluid d-flex flex-column flex-md-row justify-content-between px-lg-5 gap-3">
+            <div class="d-flex justify-content-between align-items-center w-100 w-md-auto">
+                <div>
+                    <span class="badge bg-primary me-2 fs-6"><span id="selectedCount">0</span> Selected</span> 
+                </div>
                 <button class="btn btn-sm btn-outline-light" onclick="clearSelection()">Cancel</button>
             </div>
-            <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center justify-content-end">
                 <input type="number" form="bulkForm" name="discount" class="form-control form-control-sm me-2" placeholder="Disc %" style="width:80px;">
                 <button type="submit" form="bulkForm" name="action" value="sell" class="btn btn-success me-2">Sell</button>
                 <button type="submit" form="bulkForm" name="action" value="delete" class="btn btn-danger">Delete</button>
@@ -142,10 +235,9 @@
         
         <hr>
         
-        <div class="mb-3">
-            <label class="form-label text-muted small fw-bold text-uppercase">⚙️ Toggle Columns</label>
-            <div id="columnToggleContainer" class="p-3 bg-body-secondary rounded border">
-                </div>
+        <div class="mb-3 d-none d-md-block">
+            <label class="form-label text-muted small fw-bold text-uppercase">⚙️ Toggle Columns (Desktop)</label>
+            <div id="columnToggleContainer" class="p-3 bg-body-secondary rounded border"></div>
         </div>
     </div>
 </div>
@@ -158,112 +250,100 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
-                <ul class="nav nav-tabs bg-body-secondary px-3 pt-2" id="addTabs" role="tablist">
+                <ul class="nav nav-tabs bg-body-secondary px-3 pt-2 flex-nowrap overflow-x-auto text-nowrap" id="addTabs" role="tablist">
                     <li class="nav-item"><button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#tabManual">Single Card</button></li>
                     <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tabPaste">Paste List</button></li>
                     <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tabCSV">CSV Upload</button></li>
                 </ul>
                 
                 <div class="tab-content p-4">
-                    
                     <div class="tab-pane fade show active" id="tabManual">
                         <form action="{{ url_for('add_card') }}" method="POST" class="row g-3">
-    <div class="col-md-12 mb-2 position-relative">
-        <label class="form-label text-primary fw-bold">🔎 Search Dictionary (Type 3+ letters)</label>
-        <input type="text" id="liveSearch" class="form-control form-control-lg" placeholder="e.g. 'Charizard Base'..." autocomplete="off">
-        <div id="searchResults" class="list-group position-absolute w-100 shadow" style="z-index: 1055; display:none;"></div>
-    </div>
-    
-    <div class="col-md-6">
-        <label class="form-label text-muted small fw-bold text-uppercase">Card Name</label>
-        <input type="text" id="inputName" name="card_name" class="form-control fw-bold" required>
-    </div>
-    <div class="col-md-4">
-        <label class="form-label text-muted small fw-bold text-uppercase">Set Name</label>
-        <input type="text" id="inputSet" name="set_name" class="form-control" required>
-    </div>
-    <div class="col-md-2">
-        <label class="form-label text-muted small fw-bold text-uppercase">Card #</label>
-        <input type="text" id="inputNumber" name="card_number" class="form-control">
-    </div>
+                            <div class="col-md-12 mb-2 position-relative">
+                                <label class="form-label text-primary fw-bold">🔎 Search Dictionary (Type 3+ letters)</label>
+                                <input type="text" id="liveSearch" class="form-control form-control-lg" placeholder="e.g. 'Charizard Base'..." autocomplete="off">
+                                <div id="searchResults" class="list-group position-absolute w-100 shadow" style="z-index: 1055; display:none;"></div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Card Name</label>
+                                <input type="text" id="inputName" name="card_name" class="form-control fw-bold" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Set Name</label>
+                                <input type="text" id="inputSet" name="set_name" class="form-control" required>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Card #</label>
+                                <input type="text" id="inputNumber" name="card_number" class="form-control">
+                            </div>
 
-    <div class="col-md-3">
-        <label class="form-label text-muted small fw-bold text-uppercase">Condition</label>
-        <select name="condition" class="form-select border-primary fw-bold">
-            <option value="NM" selected>Near Mint (NM)</option>
-            <option value="LP">Lightly Played (LP)</option>
-            <option value="MP">Moderately Played (MP)</option>
-            <option value="HP">Heavily Played (HP)</option>
-            <option value="DMG">Damaged (DMG)</option>
-        </select>
-    </div>
-    <div class="col-md-3">
-        <label class="form-label text-muted small fw-bold text-uppercase">Finish / Rarity</label>
-        <select name="finish" class="form-select">
-            <option value="Normal">Normal</option>
-            <option value="Holofoil">Holofoil</option>
-            <option value="Reverse Holofoil">Reverse Holofoil</option>
-            <option value="1st Edition">1st Edition</option>
-        </select>
-    </div>
-    <div class="col-md-2">
-        <label class="form-label text-muted small fw-bold text-uppercase">Price ($)</label>
-        <input type="number" step="0.01" name="price" class="form-control text-success fw-bold">
-    </div>
-    <div class="col-md-2">
-        <label class="form-label text-muted small fw-bold text-uppercase">Qty</label>
-        <input type="number" name="quantity" value="1" class="form-control text-center fw-bold">
-    </div>
-    <div class="col-md-2">
-        <label class="form-label text-muted small fw-bold text-uppercase">Destination</label>
-        <select name="status" class="form-select border-success">
-            <option value="Personal" selected>Binder</option>
-            <option value="Sales">Sales</option>
-        </select>
-    </div>
+                            <div class="col-md-3">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Condition</label>
+                                <select name="condition" class="form-select border-primary fw-bold">
+                                    <option value="NM" selected>Near Mint (NM)</option>
+                                    <option value="LP">Lightly Played (LP)</option>
+                                    <option value="MP">Moderately Played (MP)</option>
+                                    <option value="HP">Heavily Played (HP)</option>
+                                    <option value="DMG">Damaged (DMG)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Finish / Rarity</label>
+                                <select name="finish" class="form-select">
+                                    <option value="Normal">Normal</option>
+                                    <option value="Holofoil">Holofoil</option>
+                                    <option value="Reverse Holofoil">Reverse Holofoil</option>
+                                    <option value="1st Edition">1st Edition</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Price ($)</label>
+                                <input type="number" step="0.01" name="price" class="form-control text-success fw-bold">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Qty</label>
+                                <input type="number" name="quantity" value="1" class="form-control text-center fw-bold">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Destination</label>
+                                <select name="status" class="form-select border-success">
+                                    <option value="Personal" selected>Binder</option>
+                                    <option value="Sales">Sales</option>
+                                </select>
+                            </div>
 
-    <div class="col-12 mt-3">
-        <div class="form-check form-switch mb-2">
-            <input class="form-check-input" type="checkbox" id="isGradedToggle" name="is_graded">
-            <label class="form-check-label fw-bold text-danger" for="isGradedToggle">Is this a Graded Slab?</label>
-        </div>
-        
-        <div class="row g-2 d-none p-3 bg-dark rounded border border-danger" id="gradedFields">
-            <div class="col-md-4">
-                <select name="grading_company" class="form-select">
-                    <option value="PSA">PSA</option>
-                    <option value="CGC">CGC</option>
-                    <option value="BGS">BGS</option>
-                    <option value="TAG">TAG</option>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <input type="text" name="grade" class="form-control" placeholder="Grade (e.g. 10, 9.5)">
-            </div>
-            <div class="col-md-4">
-                <input type="text" name="cert_number" class="form-control" placeholder="Cert # (Optional)">
-            </div>
-        </div>
-    </div>
+                            <div class="col-12 mt-3">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" id="isGradedToggle" name="is_graded">
+                                    <label class="form-check-label fw-bold text-danger" for="isGradedToggle">Is this a Graded Slab?</label>
+                                </div>
+                                
+                                <div class="row g-2 d-none p-3 bg-dark rounded border border-danger" id="gradedFields">
+                                    <div class="col-md-4">
+                                        <select name="grading_company" class="form-select">
+                                            <option value="PSA">PSA</option>
+                                            <option value="CGC">CGC</option>
+                                            <option value="BGS">BGS</option>
+                                            <option value="TAG">TAG</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="text" name="grade" class="form-control" placeholder="Grade (e.g. 10, 9.5)">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="text" name="cert_number" class="form-control" placeholder="Cert # (Optional)">
+                                    </div>
+                                </div>
+                            </div>
 
-    <input type="hidden" id="inputImage" name="image_url">
-    <input type="hidden" name="game" value="Pokemon TCG">
-    
-    <div class="col-12 mt-4 text-end">
-        <button type="submit" class="btn btn-danger btn-lg px-5 fw-bold shadow-sm">Save Card to Inventory</button>
-    </div>
-</form>
-
-<script>
-    document.getElementById('isGradedToggle')?.addEventListener('change', function() {
-        const fields = document.getElementById('gradedFields');
-        if(this.checked) {
-            fields.classList.remove('d-none');
-        } else {
-            fields.classList.add('d-none');
-        }
-    });
-</script>
+                            <input type="hidden" id="inputImage" name="image_url">
+                            <input type="hidden" name="game" value="Pokemon TCG">
+                            
+                            <div class="col-12 mt-4 text-end">
+                                <button type="submit" class="btn btn-danger btn-lg px-5 w-100 w-md-auto fw-bold shadow-sm">Save Card</button>
+                            </div>
+                        </form>
                     </div>
 
                     <div class="tab-pane fade" id="tabPaste">
@@ -271,7 +351,7 @@
                             <label class="form-label fw-bold">Paste Raw Text</label>
                             <textarea name="paste_data" class="form-control mb-3" rows="6" placeholder="Qty Name [Set] #Num"></textarea>
                             <input type="hidden" name="game_mode" value="pokemon">
-                            <button type="submit" class="btn btn-dark px-4 fw-bold">Import Text</button>
+                            <button type="submit" class="btn btn-dark px-4 w-100 w-md-auto fw-bold">Import Text</button>
                         </form>
                     </div>
 
@@ -282,10 +362,9 @@
                                 <input type="file" name="file" class="form-control form-control-lg" required accept=".csv">
                                 <div class="form-text mt-2">Ensure columns exist for Card Name, Set, Card Number, Quantity, and Finish.</div>
                             </div>
-                            <button class="btn btn-dark px-4 fw-bold" type="submit">Upload File</button>
+                            <button class="btn btn-dark px-4 w-100 w-md-auto fw-bold" type="submit">Upload File</button>
                         </form>
                     </div>
-
                 </div>
             </div>
         </div>
@@ -293,143 +372,40 @@
 </div>
 
 <div class="modal fade" id="toolsModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title fw-bold">⚙️ Settings & Tools</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4 bg-body-secondary">
-                
-                <h6 class="text-uppercase text-muted fw-bold small mb-3">Bulk Actions</h6>
-                <div class="d-grid gap-2 mb-4">
-                    <button onclick="updateAllPrices()" class="btn btn-warning text-body fw-bold text-start">
-                        💲 Fetch Latest Market Prices
-                    </button>
-                    <form action="{{ url_for('link_orphans') }}" method="POST" class="d-grid">
-                        <button type="submit" class="btn btn-info text-body fw-bold text-start">🔗 Link Orphans to Pokedex</button>
-                    </form>
-                    <form action="{{ url_for('sync_db') }}" method="POST" class="d-grid">
-                        <button type="submit" class="btn btn-outline-secondary fw-bold text-start">🔄 Sync Master DB Cache ({{ cache_count }} cards)</button>
-                    </form>
-                </div>
-
-                <h6 class="text-uppercase text-muted fw-bold small mb-3 mt-4">Master Dictionary Overrides</h6>
-                
-                <div class="card border-0 shadow-sm mb-3">
-                    <div class="card-body p-3">
-                        <label class="form-label fw-bold small text-danger">Inject Missing Variant Slot</label>
-                        <form action="{{ url_for('force_variant') }}" method="POST" class="d-flex gap-2">
-                            <input type="text" name="reference_id" class="form-control form-control-sm" placeholder="API ID (e.g. base1-4)" required>
-                            <select name="new_finish" class="form-select form-select-sm" required>
-                                <option value="Reverse Holofoil">Rev Holo</option>
-                                <option value="1st Edition">1st Ed</option>
-                                <option value="Holofoil">Holo</option>
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-danger">Inject</button>
-                        </form>
-                    </div>
-                </div>
-
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body p-3">
-                        <label class="form-label fw-bold small text-danger">Force-Fetch Missing Card API</label>
-                        <form action="{{ url_for('force_api_fetch') }}" method="POST" class="d-flex gap-2">
-                            <input type="text" name="api_id" class="form-control form-control-sm" placeholder="e.g. sm12-160" required>
-                            <button type="submit" class="btn btn-sm btn-danger">Fetch</button>
-                        </form>
-                    </div>
-                </div>
-
-                <hr class="my-4">
-
-                <h6 class="text-uppercase text-muted fw-bold small mb-3">Storefront Settings</h6>
-                <form action="{{ url_for('update_settings') }}" method="POST" class="card border-0 shadow-sm p-3">
-                    <div class="form-check form-switch fs-5">
-                        <input class="form-check-input" type="checkbox" name="show_prices" id="showPrices" {% if settings.show_prices %}checked{% endif %}>
-                        <label class="form-check-label ms-2" for="showPrices">Display Prices to Public</label>
-                    </div>
-                    <button type="submit" class="btn btn-dark btn-sm mt-3">Save Store Settings</button>
-                </form>
-
-            </div>
-        </div>
     </div>
-</div>
 
 {% for card in inventory %}
 <div class="modal fade" id="editModal{{ card.id }}" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header bg-dark text-white border-bottom border-secondary">
-                <h5 class="modal-title fw-bold">
-                    ✏️ Edit {{ card.card_name }}
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body bg-body-tertiary">
-                <div class="mb-4 text-center">
-                    <span class="badge bg-secondary">{{ card.set_name }} #{{ card.card_number or '-' }}</span>
-                    <span class="badge bg-info text-dark">{{ card.finish or 'Normal' }}</span>
-                </div>
-
-                <form action="{{ url_for('update_card', id=card.id) }}" method="POST">
-                    <input type="hidden" name="action" value="update_details">
-                    
-                    <div class="row g-3 mb-3">
-                        <div class="col-6">
-                            <label class="form-label text-muted small fw-bold text-uppercase">Price</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-dark text-success border-secondary">$</span>
-                                <input type="number" step="0.01" name="price" class="form-control fw-bold text-success" value="{{ card.price }}">
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label text-muted small fw-bold text-uppercase">Quantity</label>
-                            <input type="number" name="quantity" class="form-control text-center fw-bold" value="{{ card.quantity }}">
-                        </div>
-                    </div>
-
-                    <div class="row g-3 mb-4">
-                        <div class="col-6">
-                            <label class="form-label text-muted small fw-bold text-uppercase">Condition</label>
-                            <select name="condition" class="form-select">
-                                <option value="NM" {% if card.condition == 'NM' %}selected{% endif %}>Near Mint (NM)</option>
-                                <option value="LP" {% if card.condition == 'LP' %}selected{% endif %}>Lightly Played (LP)</option>
-                                <option value="MP" {% if card.condition == 'MP' %}selected{% endif %}>Moderately Played (MP)</option>
-                                <option value="HP" {% if card.condition == 'HP' %}selected{% endif %}>Heavily Played (HP)</option>
-                                <option value="DMG" {% if card.condition == 'DMG' %}selected{% endif %}>Damaged (DMG)</option>
-                            </select>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label text-muted small fw-bold text-uppercase">Binder / Location</label>
-                            <input type="text" name="location" class="form-control" value="{{ card.location or '' }}" placeholder="e.g. Box 3">
-                        </div>
-                    </div>
-                    
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary btn-lg fw-bold shadow-sm">Save Changes</button>
-                    </div>
-                </form>
-
-                <hr class="my-4 border-secondary">
-
-                <form action="{{ url_for('update_card', id=card.id) }}" method="POST" onsubmit="return confirm('Are you absolutely sure you want to delete this card from your inventory?');">
-                    <input type="hidden" name="action" value="delete">
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-outline-danger">🗑️ Delete Card</button>
-                    </div>
-                </form>
-            </div>
-        </div>
     </div>
-</div>
 {% endfor %}
 
 {% endblock %}
 
 {% block scripts %}
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // --- MOBILE DRILL DOWN INTERACTION ---
+    const inventoryBody = document.getElementById('inventoryBody');
+    if(inventoryBody) {
+        inventoryBody.addEventListener('click', function(e) {
+            // Only trigger on mobile view where our CSS grid is active
+            if (window.innerWidth >= 768) return;
+            
+            const row = e.target.closest('.inventory-row');
+            if (!row) return;
+
+            // Prevent drill down when explicitly interacting with inputs/buttons
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                return;
+            }
+
+            // Toggle expanded view
+            row.classList.toggle('is-expanded');
+        });
+    }
+
+
 // --- CLIENT-SIDE PRICE UPDATER ---
 async function updateAllPrices() {
     const searchVal = document.getElementById('adminSearch').value;

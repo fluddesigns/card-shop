@@ -19,7 +19,8 @@ app = Flask(__name__)
 
 # --- Configuration ---
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_key')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///inventory.db')
+# Updated
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///inventory.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- Session Config (Shopping Cart) ---
@@ -49,7 +50,10 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
-    cards = db.relationship('Card', backref='owner', lazy=True, cascade="all, delete-orphan")
+    
+    # --- UPDATED RELATIONSHIP ---
+    inventory_items = db.relationship('Inventory', backref='owner', lazy=True, cascade="all, delete-orphan")
+    
     sales = db.relationship('Sale', backref='seller', lazy=True, cascade="all, delete-orphan")
     settings = db.relationship('Settings', backref='owner', uselist=False, cascade="all, delete-orphan")
 
@@ -68,58 +72,10 @@ class Settings(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     show_prices = db.Column(db.Boolean, default=False)
 
-class CardReference(db.Model):
-    """Local cache of all official Pokemon cards for autocomplete"""
-    # New: Specific variant release dates (Fixes the Promo issue)
-    release_date = db.Column(db.String(25))
-    id = db.Column(db.String(50), primary_key=True) # API ID (e.g. base1-4)
-    name = db.Column(db.String(150), nullable=False)
-    set_name = db.Column(db.String(100), nullable=False)
-    set_id = db.Column(db.String(50))
-    number = db.Column(db.String(20))
-    image_url = db.Column(db.String(500))
-    tcgplayer_id = db.Column(db.String(50))
-
-    # NEW: Phase 1 - Track if this is a species you are actively chasing
-    is_favorite = db.Column(db.Boolean, default=False)
-    # NEW: Phase 1.5 - Track all available finishes for this card
-    available_finishes = db.Column(db.String(255), default="Normal")
-
 class MasterTracker(db.Model):
     """Tracks the umbrella species you are hunting (e.g. 'Meowth') to group all wildcards."""
     id = db.Column(db.Integer, primary_key=True)
     species_name = db.Column(db.String(50), unique=True, nullable=False)
-
-class Card(db.Model):
-    # New: Inventory Segregation
-    status = db.Column(db.String(20), default='Personal', nullable=False)
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
-    # NEW: Phase 1 - Link your inventory to the master dictionary
-    reference_id = db.Column(db.String(50), nullable=True)
-                             
-    game = db.Column(db.String(50), nullable=False)
-    set_name = db.Column(db.String(100), nullable=False)
-    card_name = db.Column(db.String(150), nullable=False)
-    card_number = db.Column(db.String(50))
-    condition = db.Column(db.String(20), default='NM')
-    price = db.Column(db.Float, default=0.0)
-    quantity = db.Column(db.Integer, default=1)
-    finish = db.Column(db.String(50), default='Normal')
-    image_url = db.Column(db.String(500))
-    variant = db.Column(db.String(100))
-    location = db.Column(db.String(100))
-    
-    # Graded Card Fields
-    grading_company = db.Column(db.String(50), nullable=True) # PSA, CGC, TAG
-    grade = db.Column(db.String(20), nullable=True)           # 10, 9.5, 9
-    cert_number = db.Column(db.String(100), nullable=True)    # Certification ID
-
-    # New: 1st Edition Toggle
-    is_first_edition = db.Column(db.Boolean, default=False)
-
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -129,6 +85,61 @@ class Sale(db.Model):
     sale_price = db.Column(db.Float, default=0.0)
     quantity = db.Column(db.Integer, default=1)
     sale_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+# --- New DB models ---
+class ExpansionSet(db.Model):
+    __tablename__ = 'expansion_sets'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    series = db.Column(db.String(100), nullable=False)
+    set_code = db.Column(db.String(20), unique=True, nullable=False)
+    release_date = db.Column(db.Date, nullable=True)
+    total_cards = db.Column(db.Integer, nullable=True)
+    
+    # Relationship: One Set has many Master Cards
+    cards = db.relationship('MasterCard', backref='expansion_set', lazy=True, cascade="all, delete-orphan")
+
+class MasterCard(db.Model):
+    __tablename__ = 'master_cards'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    set_id = db.Column(db.Integer, db.ForeignKey('expansion_sets.id'), nullable=False)
+    
+    name = db.Column(db.String(150), nullable=False)
+    card_number = db.Column(db.String(20), nullable=False)
+    rarity = db.Column(db.String(50), nullable=True)
+    card_type = db.Column(db.String(50), nullable=True)
+    variant_type = db.Column(db.String(50), nullable=True) # e.g., Normal, Reverse Holo, 1st Edition
+    
+    # API Links
+    tcgplayer_id = db.Column(db.String(50), unique=True, nullable=True)
+    pricecharting_id = db.Column(db.String(50), unique=True, nullable=True)
+    
+    # Ready for local hosting (e.g., 'img/cards/base1/4.webp')
+    image_url = db.Column(db.String(255), nullable=True) 
+
+    # Relationship: One Master Card has many Inventory Items
+    inventory_items = db.relationship('Inventory', backref='master_card', lazy=True, cascade="all, delete-orphan")
+
+class Inventory(db.Model):
+    __tablename__ = 'inventory'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    master_card_id = db.Column(db.Integer, db.ForeignKey('master_cards.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # Links to your existing User model
+    
+    condition = db.Column(db.String(20), nullable=False, default='NM')
+    grading_company = db.Column(db.String(20), nullable=True)
+    grade_value = db.Column(db.Numeric(3, 1), nullable=True) # Numeric is perfect for precise grades like 9.5
+    
+    status = db.Column(db.String(30), nullable=False, default='personal_collection')
+    
+    # Financial tracking for the future POS
+    acquired_price = db.Column(db.Numeric(10, 2), nullable=True)
+    
+    notes = db.Column(db.Text, nullable=True)
+    date_added = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 # --- Startup & Migration Check ---
 with app.app_context():
@@ -373,61 +384,83 @@ def sync_db():
     
     try:
         api_url = "https://api.pokemontcg.io/v2/cards"
-        params = {'pageSize': 250} 
+        params = {'pageSize': 250} # Note: Without pagination, this only grabs the first 250 cards
         headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
         
         r = requests.get(api_url, params=params, headers=headers, timeout=30, verify=False)
         
         if r.status_code == 200:
             data = r.json()
-            count = 0
+            sets_added = 0
+            cards_added = 0
+            
             if 'data' in data:
                 for item in data['data']:
                     try:
-                        c_id = item.get('id')
-                        if not c_id: continue
+                        # --- 1. HANDLE THE EXPANSION SET ---
+                        api_set = item.get('set', {})
+                        set_api_id = api_set.get('id') # e.g., 'base1'
                         
-                        exists = CardReference.query.get(c_id)
+                        if not set_api_id: continue
                         
-                        # Safely extract set data
-                        card_set = item.get('set') or {}
-                        fresh_release = card_set.get('releaseDate')
-                        fresh_finishes = get_clean_finishes(item.get('tcgplayer'))
-                        images = item.get('images') or {}
+                        # Check if this set already exists in our database
+                        db_set = ExpansionSet.query.filter_by(set_code=set_api_id).first()
                         
-                        if not exists:
-                            # Insert New Card
-                            ref = CardReference(
-                                id=c_id,
-                                name=item.get('name', 'Unknown'),
-                                set_name=card_set.get('name', 'Unknown'),
-                                set_id=card_set.get('id'),
-                                number=item.get('number', ''),
-                                image_url=images.get('small'),
-                                release_date=fresh_release,
-                                available_finishes=fresh_finishes
+                        if not db_set:
+                            # Convert 'YYYY/MM/DD' string into a Python Date object
+                            rel_date_str = api_set.get('releaseDate')
+                            parsed_date = None
+                            if rel_date_str:
+                                try:
+                                    parsed_date = datetime.strptime(rel_date_str, '%Y/%m/%d').date()
+                                except ValueError:
+                                    parsed_date = None
+                            
+                            db_set = ExpansionSet(
+                                name=api_set.get('name', 'Unknown'),
+                                series=api_set.get('series', 'Unknown'),
+                                set_code=set_api_id, 
+                                release_date=parsed_date,
+                                total_cards=api_set.get('printedTotal')
                             )
-                            db.session.add(ref)
-                            count += 1
-                        else:
-                            # Update Existing Card
-                            updated = False
-                            if exists.available_finishes != fresh_finishes:
-                                exists.available_finishes = fresh_finishes
-                                updated = True
-                            if not exists.release_date and fresh_release:
-                                exists.release_date = fresh_release
-                                updated = True
-                                
-                            if updated:
-                                count += 1
-                                
+                            db.session.add(db_set)
+                            
+                            # CRITICAL: flush() pushes the set to the database to generate an ID, 
+                            # but doesn't permanently commit it yet. We need this ID for the card!
+                            db.session.flush() 
+                            sets_added += 1
+
+                        # --- 2. HANDLE THE MASTER CARD ---
+                        c_name = item.get('name', 'Unknown')
+                        c_number = item.get('number', '')
+                        
+                        # Check if card exists in this specific set
+                        db_card = MasterCard.query.filter_by(
+                            set_id=db_set.id, 
+                            card_number=c_number, 
+                            name=c_name
+                        ).first()
+                        
+                        if not db_card:
+                            images = item.get('images', {})
+                            
+                            db_card = MasterCard(
+                                set_id=db_set.id,          # Linking the card to the set!
+                                name=c_name,
+                                card_number=c_number,
+                                rarity=item.get('rarity'),
+                                card_type=item.get('supertype'),
+                                image_url=images.get('small') # We will proxy this locally later
+                            )
+                            db.session.add(db_card)
+                            cards_added += 1
+                            
                     except Exception as e:
                         print(f"CRASH ON CARD {item.get('id')}: {str(e)}", flush=True)
                         continue
                 
                 db.session.commit()
-                flash(f"Synced/Updated {count} cards in reference cache.")
+                flash(f"Sync Complete: Added {sets_added} new sets and {cards_added} new cards to the Master DB.")
             else:
                 flash("Sync Failed: Invalid data format from API.")
         else:
@@ -749,8 +782,13 @@ def submit_quote():
 @login_required
 def admin():
     settings = get_user_settings(current_user.id)
-    inventory = Card.query.filter_by(user_id=current_user.id).order_by(Card.id.desc()).all()
-    cache_count = CardReference.query.count()
+    
+    # Fetch inventory, ordered by newest added
+    inventory = Inventory.query.filter_by(user_id=current_user.id).order_by(Inventory.date_added.desc()).all()
+    
+    # Count total unique master cards instead of the old CardReference
+    cache_count = MasterCard.query.count()
+    
     return render_template('admin.html', inventory=inventory, settings=settings, cache_count=cache_count)
 
 @app.route('/sales')
@@ -807,52 +845,70 @@ def update_settings():
 def add_card():
     try:
         is_graded = request.form.get('is_graded') == 'on'
-        is_first_edition = request.form.get('is_first_edition') == 'on'
-        
         grading_company = request.form.get('grading_company') if is_graded else None
-        grade = request.form.get('grade') if is_graded else None
-        cert_number = request.form.get('cert_number') if is_graded else None
+        
+        # Convert empty grade string to None, or parse to float if possible
+        grade_raw = request.form.get('grade')
+        grade_val = None
+        if is_graded and grade_raw and grade_raw.strip() != '':
+            try:
+                grade_val = float(grade_raw)
+            except ValueError:
+                grade_val = None
 
-        # --- THE FIX: Safely parse empty strings into numbers ---
+        # Safely parse empty strings into numbers
         price_raw = request.form.get('price')
         price_val = float(price_raw) if price_raw and price_raw.strip() != '' else 0.0
         
-        qty_raw = request.form.get('quantity')
-        qty_val = int(qty_raw) if qty_raw and qty_raw.strip() != '' else 1
-        
-        # --- NEW: Auto-link to the Pokedex Dictionary on creation ---
         card_name = request.form.get('card_name')
         set_name = request.form.get('set_name')
         card_number = request.form.get('card_number')
         
-        ref_match = CardReference.query.filter_by(name=card_name, set_name=set_name).first()
-        ref_id = ref_match.id if ref_match else None
+        # --- THE RELATIONAL FIX ---
+        # We must find the MasterCard to link the physical inventory item to.
+        # We use a join to match both the card name and the expansion set name.
+        master_match = MasterCard.query.join(ExpansionSet).filter(
+            MasterCard.name.ilike(card_name),
+            ExpansionSet.name.ilike(set_name),
+            MasterCard.card_number == card_number
+        ).first()
 
-        new_card = Card(
-            user_id = current_user.id,
-            status = request.form.get('status', 'Personal'),
-            reference_id = ref_id,  # Instantly linked!
-            game = request.form.get('game'),
-            card_name = card_name,
-            set_name = set_name,
-            card_number = card_number,
-            condition = request.form.get('condition', 'NM'),
-            finish = request.form.get('finish', 'Normal'),
-            price = price_val,
-            quantity = qty_val,
-            image_url = request.form.get('image_url', ''),
-            variant = request.form.get('variant', ''),
-            location = request.form.get('location', ''),
-            grading_company = grading_company,
-            grade = grade,
-            cert_number = cert_number,
-            is_first_edition = is_first_edition
-        )
-        db.session.add(new_card)
+        if not master_match:
+            # Fallback: If no card number was provided, try a looser match just by name and set
+            master_match = MasterCard.query.join(ExpansionSet).filter(
+                MasterCard.name.ilike(card_name),
+                ExpansionSet.name.ilike(set_name)
+            ).first()
+
+        if not master_match:
+            # Enforce the relational structure: It MUST exist in the Master DB first.
+            flash(f"Error: Could not find '{card_name}' from '{set_name}' in the Master Database. Please sync it from the API first.", "error")
+            return redirect(url_for('admin'))
+
+        # Strict Scenario A: If quantity > 1, loop to insert individual rows
+        qty_raw = request.form.get('quantity')
+        qty_val = int(qty_raw) if qty_raw and qty_raw.strip() != '' else 1
+
+        for _ in range(qty_val):
+            new_item = Inventory(
+                master_card_id=master_match.id,
+                user_id=current_user.id,
+                condition=request.form.get('condition', 'NM'),
+                grading_company=grading_company,
+                grade_value=grade_val,
+                status=request.form.get('status', 'personal_collection'),
+                acquired_price=price_val,
+                notes=f"Cert: {request.form.get('cert_number')}" if is_graded and request.form.get('cert_number') else None
+            )
+            db.session.add(new_item)
+            
         db.session.commit()
-        flash(f'Added {new_card.card_name} to inventory.')
+        flash(f'Successfully added {qty_val}x {master_match.name} to your inventory.')
+        
     except Exception as e:
+        db.session.rollback()
         flash(f'Error adding card: {str(e)}')
+        
     return redirect(url_for('admin'))
 
 @app.route('/paste_import', methods=['POST'])

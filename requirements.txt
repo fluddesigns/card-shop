@@ -7,3 +7,4 @@ pandas
 gunicorn
 werkzeug
 requests
+psycopg2-binary==2.9.9
