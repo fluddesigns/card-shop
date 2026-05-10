@@ -12,6 +12,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_session import Session
 from flask_mail import Mail, Message
 from sqlalchemy import text
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 # Suppress InsecureRequestWarning for local dev if SSL certs are missing
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -38,6 +39,9 @@ app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get("FROM_EMAIL", "sales@fludmedia.com")
 
+# Initialize the token generator using your app's secret key
+token_serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
 mail = Mail(app)
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -48,7 +52,13 @@ login_manager.login_view = 'login'
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
+
     username = db.Column(db.String(150), unique=True, nullable=False)
+    # What actually shows up on screen (e.g. Poke Master 99)
+    display_name = db.Column(db.String(150), nullable=True) 
+    # New Security Columns
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    is_verified = db.Column(db.Boolean, default=False)
     password_hash = db.Column(db.String(200), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     
@@ -210,27 +220,67 @@ def register():
         return redirect(url_for('admin'))
 
     if request.method == 'POST':
-        username = request.form.get('username').lower()
-        password = request.form.get('password')
-        confirm = request.form.get('confirm_password')
+        # 1. Honeypot Bot Trap
+        if request.form.get('hp_check'):
+            flash("Registration failed.")
+            return redirect(url_for('register'))
 
-        if password != confirm:
-            flash("Passwords do not match.")
+        email = request.form.get('email').lower().strip()
+        username = request.form.get('username').lower().strip()
+        display_name = request.form.get('display_name', username).strip()
+        password = request.form.get('password')
+
+        # 2. Availability Checks
+        if User.query.filter_by(email=email).first():
+            flash("Email is already registered.")
             return redirect(url_for('register'))
         
         if User.query.filter_by(username=username).first():
-            flash("Username already exists.")
+            flash("Username is already taken.")
             return redirect(url_for('register'))
         
-        new_user = User(username=username)
+        # 3. Create the Unverified User
+        new_user = User(username=username, display_name=display_name, email=email)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
         
-        login_user(new_user)
-        return redirect(url_for('admin'))
+        # 4. Generate Token & Send Email
+        token = token_serializer.dumps(email, salt='email-verify')
+        verify_url = url_for('verify_email', token=token, _external=True)
+        
+        msg = Message("Verify your Flud Media Account", recipients=[email])
+        msg.body = f"Welcome to Flud Media TCG!\n\nPlease click the link below to verify your account and start managing your inventory:\n{verify_url}\n\nThis link will expire in 24 hours."
+        mail.send(msg)
+        
+        flash("Registration successful! Please check your email to verify your account.")
+        return redirect(url_for('login'))
         
     return render_template('register.html')
+
+@app.route('/verify/<token>')
+def verify_email(token):
+    try:
+        # Max age is in seconds (86400 = 24 hours)
+        email = token_serializer.loads(token, salt='email-verify', max_age=86400)
+    except SignatureExpired:
+        flash("The verification link has expired. Please log in to request a new one.")
+        return redirect(url_for('login'))
+    except BadSignature:
+        flash("Invalid verification link.")
+        return redirect(url_for('login'))
+        
+    user = User.query.filter_by(email=email).first_or_404()
+    if user.is_verified:
+        flash("Account already verified. Please log in.")
+    else:
+        user.is_verified = True
+        db.session.commit()
+        flash("Email verified successfully! You can now access your Binder.")
+        login_user(user) # Auto-login upon clicking the link
+        return redirect(url_for('admin'))
+        
+    return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -243,6 +293,13 @@ def login():
         
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
+
+            # --- NEW VERIFICATION LOCK ---
+            if not user.is_verified:
+                flash("Please check your email and verify your account before logging in.")
+                return redirect(url_for('login'))
+            # -----------------------------
+
             if user.username == 'flud' and not user.is_admin:
                 user.is_admin = True
                 db.session.commit()
@@ -252,6 +309,45 @@ def login():
             
         flash('Invalid username or password')
     return render_template('login.html')
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email').lower().strip()
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            token = token_serializer.dumps(email, salt='password-reset')
+            reset_url = url_for('reset_password', token=token, _external=True)
+            
+            msg = Message("Password Reset Request", recipients=[email])
+            msg.body = f"Click the link below to reset your password:\n{reset_url}\n\nIf you did not request this, please ignore this email. This link expires in 30 minutes."
+            mail.send(msg)
+            
+        # Silent Failure: Always return this message so attackers can't fish for emails
+        flash("If an account with that email exists, a reset link has been sent to your inbox.")
+        return redirect(url_for('login'))
+        
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    try:
+        # Max age is in seconds (1800 = 30 minutes)
+        email = token_serializer.loads(token, salt='password-reset', max_age=1800)
+    except (SignatureExpired, BadSignature):
+        flash("The password reset link is invalid or has expired.")
+        return redirect(url_for('forgot_password'))
+        
+    if request.method == 'POST':
+        user = User.query.filter_by(email=email).first_or_404()
+        user.set_password(request.form.get('password'))
+        db.session.commit()
+        
+        flash("Your password has been successfully updated! You may now log in.")
+        return redirect(url_for('login'))
+        
+    return render_template('reset_password.html', token=token)
 
 @app.route('/logout')
 @login_required
