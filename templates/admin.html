@@ -223,19 +223,6 @@
 
                 <hr class="mb-4">
 
-                <label class="form-label text-muted small fw-bold text-uppercase">Database Management</label>
-                <form action="{{ url_for('sync_db') }}" method="POST" class="mb-3">
-                    <button type="submit" class="btn btn-dark w-100 fw-bold py-2 shadow-sm" @click="$el.innerHTML = `<i class='bi bi-hourglass-split me-1 spinner-border spinner-border-sm'></i> Syncing Background...`">
-                        <i class="bi bi-arrow-repeat me-1"></i> Sync Master Database (API)
-                    </button>
-                    
-                    <small class="text-muted d-block text-center mt-1" 
-                           x-data="{ count: {{ cache_count or 0 }} }" 
-                           x-init="setInterval(() => { fetch('/api/cache_count').then(r => r.json()).then(d => count = d.count).catch(e => console.log('Polling paused')) }, 3000)">
-                        Local Cache: <span x-text="count" class="fw-bold text-primary transition-all"></span> Master Cards
-                    </small>
-                </form>
-
                 <label class="form-label text-muted small fw-bold text-uppercase">Manual API Inject</label>
                 <form action="{{ url_for('force_api_fetch') }}" method="POST" class="mb-4">
                     <div class="input-group">
@@ -392,6 +379,37 @@
 {% block scripts %}
 <script>
     document.addEventListener('alpine:init', () => {
+        // Component to handle background syncing without page reloads
+        Alpine.data('dbSyncComponent', () => ({
+            count: parseInt('{{ cache_count or 0 }}'),
+            isSyncing: false,
+            
+            init() {
+                // Poll the server every 3 seconds for the new count
+                setInterval(() => {
+                    fetch('/api/cache_count')
+                        .then(r => r.json())
+                        .then(d => {
+                            this.count = d.count;
+                        })
+                        .catch(e => console.log('Polling paused'));
+                }, 3000);
+            },
+            
+            async triggerSync() {
+                this.isSyncing = true;
+                try {
+                    // Send the POST request silently in the background
+                    await fetch('{{ url_for("sync_db") }}', { method: 'POST' });
+                    // The python background thread starts, and the setInterval above catches the changes
+                } catch (e) {
+                    console.error("Sync failed to start", e);
+                    this.isSyncing = false;
+                }
+            }
+        }));
+
+
         Alpine.data('inventoryApp', () => ({
             searchQuery: '',
             filterStatus: '',      // NEW
