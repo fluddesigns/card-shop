@@ -5,9 +5,22 @@
 <div class="container py-4" x-data="inventoryApp()">
     
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
-        <div>
-            <small class="text-muted"><span x-text="visibleCount"></span> Cards Visible</small>
-            <h1 class="fw-bold mb-0">Inventory Dashboard</h1>
+        <div class="d-flex flex-column">
+            <h1 class="fw-bold mb-1">Inventory Dashboard</h1>
+            <div class="d-flex align-items-center gap-3 text-muted small fw-semibold">
+                <span><i class="bi bi-card-text me-1"></i> <span x-text="visibleCount"></span> Cards Visible</span>
+                
+                <span class="border-start border-2 ps-3" x-data="dbSyncComponent()" x-cloak>
+                    <i class="bi bi-database-fill text-primary me-1"></i> 
+                    Master DB: <span x-text="count" class="text-primary fw-bold transition-all"></span>
+                    <button class="btn btn-sm btn-link py-0 text-decoration-none ms-1 fw-bold" 
+                            @click="triggerSync" 
+                            :disabled="isSyncing">
+                        <i class="bi bi-arrow-repeat" :class="isSyncing ? 'spinner-border spinner-border-sm' : ''"></i> 
+                        <span x-text="isSyncing ? 'Syncing...' : 'Sync'"></span>
+                    </button>
+                </span>
+            </div>
         </div>
         
         <div class="d-flex flex-wrap flex-md-nowrap gap-2">
@@ -212,10 +225,15 @@
 
                 <label class="form-label text-muted small fw-bold text-uppercase">Database Management</label>
                 <form action="{{ url_for('sync_db') }}" method="POST" class="mb-3">
-                    <button type="submit" class="btn btn-dark w-100 fw-bold py-2 shadow-sm">
+                    <button type="submit" class="btn btn-dark w-100 fw-bold py-2 shadow-sm" @click="$el.innerHTML = `<i class='bi bi-hourglass-split me-1 spinner-border spinner-border-sm'></i> Syncing Background...`">
                         <i class="bi bi-arrow-repeat me-1"></i> Sync Master Database (API)
                     </button>
-                    <small class="text-muted d-block text-center mt-1">Local Cache: {{ cache_count }} Master Cards</small>
+                    
+                    <small class="text-muted d-block text-center mt-1" 
+                           x-data="{ count: {{ cache_count or 0 }} }" 
+                           x-init="setInterval(() => { fetch('/api/cache_count').then(r => r.json()).then(d => count = d.count).catch(e => console.log('Polling paused')) }, 3000)">
+                        Local Cache: <span x-text="count" class="fw-bold text-primary transition-all"></span> Master Cards
+                    </small>
                 </form>
 
                 <label class="form-label text-muted small fw-bold text-uppercase">Manual API Inject</label>

@@ -1485,6 +1485,13 @@ def force_variant():
             
     return redirect(url_for('admin'))
 
+@app.route('/api/cache_count')
+@super_user_required
+def get_cache_count():
+    # Quickly grab the total number of rows in the MasterCard table
+    count = MasterCard.query.count()
+    return jsonify({'count': count})
+
 @app.route('/api/force_api_fetch', methods=['POST'])
 @super_user_required
 def force_api_fetch():
