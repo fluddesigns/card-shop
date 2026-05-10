@@ -25,6 +25,8 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_key')
 # Updated
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///inventory.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Super_Admin credentials are now set via environment variables for security
+app.config['SUPER_ADMIN'] = os.environ.get('SUPER_ADMIN_USERNAME', 'flud').lower()
 
 # --- Session Config (Shopping Cart) ---
 app.config["SESSION_TYPE"] = "filesystem"
@@ -172,7 +174,8 @@ class Inventory(db.Model):
 with app.app_context():
     db.create_all()
     
-    admin_user = User.query.filter_by(username='flud').first()
+    super_admin_name = app.config.get('SUPER_ADMIN')
+    admin_user = User.query.filter_by(username=super_admin_name).first()
     if admin_user and not admin_user.is_admin:
         admin_user.is_admin = True
         db.session.commit()
@@ -314,7 +317,7 @@ def login():
                 return redirect(url_for('login'))
             # -----------------------------
 
-            if user.username == 'flud' and not user.is_admin:
+            if user.username == app.config['SUPER_ADMIN'] and not user.is_admin:
                 user.is_admin = True
                 db.session.commit()
                 
@@ -961,8 +964,8 @@ def delete_user(user_id):
         return redirect(url_for('admin'))
         
     user_to_delete = User.query.get_or_404(user_id)
-    if user_to_delete.username == 'flud':
-        flash("Cannot delete Super Admin!")
+    if user_to_delete.username == app.config['SUPER_ADMIN']:
+        flash("Cannot delete the Super Admin account!")
         return redirect(url_for('super_admin'))
         
     db.session.delete(user_to_delete)
