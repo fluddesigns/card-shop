@@ -455,7 +455,9 @@ def user_storefront(username):
             'variant': item.variant.lower().strip(),
             'status': item.status,
             'price': display_price,
-            'condition': item.condition
+            'condition': item.condition,
+            'grading_company': item.grading_company,
+            'grade_value': item.grade_value
         })
 
     stats = {

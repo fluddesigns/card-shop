@@ -103,7 +103,14 @@
                             
                             <span class="fw-semibold text-start">
                                 {{ physical_item.variant|title }} 
-                                <small class="opacity-75 ms-1">({{ physical_item.condition }})</small>
+                                
+                                {% if physical_item.grading_company %}
+                                    <span class="badge bg-warning text-dark ms-1 shadow-sm border border-warning-subtle" style="font-size: 0.7rem;">
+                                        <i class="bi bi-award-fill"></i> {{ physical_item.grading_company }} {{ physical_item.grade_value }}
+                                    </span>
+                                {% else %}
+                                    <small class="opacity-75 ms-1">({{ physical_item.condition }})</small>
+                                {% endif %}
                             </span>
                             
                             {% if physical_item.price %}

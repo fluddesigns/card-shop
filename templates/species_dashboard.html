@@ -63,13 +63,13 @@
         </div>
 
         <div class="row g-2 align-items-center">
-            <div class="col-md-5">
+            <div class="col-md-3">
                 <div class="input-group">
                     <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-search"></i></span>
                     <input type="text" class="form-control border-start-0 ps-0" placeholder="Search variants..." x-model="searchQuery">
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <select class="form-select" x-model="filterSet">
                     <option value="">All Expansion Sets</option>
                     {% set unique_sets = [] %}
@@ -81,12 +81,28 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
-                <button class="btn w-100 fw-bold d-flex align-items-center justify-content-center transition-all" 
+            <div class="col-md-4">
+                <div class="input-group">
+                    <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-arrow-down-up"></i></span>
+                    <select class="form-select border-start-0 border-end-0" x-model="sortBy">
+                        <option value="releaseIndex">Sort: Release Date</option>
+                        <option value="name">Sort: Name</option>
+                        <option value="pct">Sort: Completion %</option>
+                        <option value="missing">Sort: Missing Variants</option>
+                        <option value="owned">Sort: Owned Variants</option>
+                    </select>
+                    <button class="btn btn-outline-secondary px-3" @click="sortDesc = !sortDesc" title="Toggle Sort Direction">
+                        <i class="bi fw-bold" :class="sortDesc ? 'bi-sort-down-alt' : 'bi-sort-down'"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button class="btn w-100 fw-bold d-flex align-items-center justify-content-center transition-all px-1" 
                         :class="huntMode ? 'btn-danger shadow' : 'btn-outline-danger'"
                         @click="huntMode = !huntMode">
                     <i class="bi me-2" :class="huntMode ? 'bi-crosshair' : 'bi-crosshair2'"></i>
-                    <span x-text="huntMode ? 'HUNT MODE: ON' : 'HUNT MODE: OFF'"></span>
+                    <span class="d-none d-lg-inline" x-text="huntMode ? 'HUNT: ON' : 'HUNT: OFF'"></span>
+                    <span class="d-lg-none">Hunt</span>
                 </button>
             </div>
         </div>
@@ -115,7 +131,8 @@
             <div x-show="isVisible('{{ master.name|lower|replace("'", "\\'") }}', '{{ master.expansion_set.name|lower|replace("'", "\\'") }}', {{ 'true' if is_completely_owned else 'false' }})"
                  x-transition
                  id="wrapper-{{ master.id }}"
-                 class="{% if not has_any_variant %}not-owned{% endif %}">
+                 class="{% if not has_any_variant %}not-owned{% endif %}"
+                 :style="{ order: sortedOrder['{{ master.id }}'] }">
                 
                 <div class="d-flex flex-column align-items-center text-center">
                     
@@ -156,24 +173,82 @@
 
 {% block scripts %}
 <script>
+// 1. Build a JavaScript array of stats directly from the Jinja context on load
+const cardStats = [
+    {% for master in master_cards %}
+        {% set owned_finishes = owned_dict.get(master.id, []) %}
+        {% set available_finishes = master.variant_type.split(',') if master.variant_type else ['Normal'] %}
+        {% set clean_available = [] %}
+        {% for f in available_finishes %}{% set _ = clean_available.append(f.strip().lower()) %}{% endfor %}
+        {% set missing_count = clean_available|length - owned_finishes|length %}
+        {% set pct = 0 if clean_available|length == 0 else (owned_finishes|length / clean_available|length * 100) %}
+        {
+            id: '{{ master.id }}',
+            releaseIndex: {{ loop.index0 }}, // Preserves original DB release order
+            name: '{{ master.name|lower|replace("'", "\\'") }}',
+            pct: {{ pct|round(2) }},
+            missing: {{ missing_count }},
+            owned: {{ owned_finishes|length }}
+        }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('speciesDashboard', () => ({
         searchQuery: '',
         filterSet: '',
-        huntMode: false, // Toggles the entire UI state
+        huntMode: false,
+        
+        // Sorting State
+        sortBy: 'releaseIndex', 
+        sortDesc: false, 
+        cardData: cardStats,
+
+        init() {
+            // Smart auto-flip: If they switch to a metric where high-to-low makes more sense, do it automatically
+            this.$watch('sortBy', value => {
+                if (value === 'pct' || value === 'owned' || value === 'missing') {
+                    this.sortDesc = true; 
+                } else {
+                    this.sortDesc = false; 
+                }
+            });
+        },
+
+        // Calculates the display order and applies it via CSS Grid Order
+        get sortedOrder() {
+            let sorted = [...this.cardData].sort((a, b) => {
+                let valA = a[this.sortBy];
+                let valB = b[this.sortBy];
+
+                // Tie-breaker fallback
+                if (valA === valB) {
+                    return a.name.localeCompare(b.name);
+                }
+
+                if (this.sortDesc) {
+                    return valA < valB ? 1 : -1;
+                } else {
+                    return valA > valB ? 1 : -1;
+                }
+            });
+
+            // Create a lookup map: { 'card_id': new_order_index }
+            let orderMap = {};
+            sorted.forEach((card, index) => {
+                orderMap[card.id] = index;
+            });
+            return orderMap;
+        },
         
         isVisible(name, set, isCompletelyOwned) {
-            // 1. Text Search
             let matchesText = true;
             if (this.searchQuery !== '') {
                 const text = (name + " " + set).toLowerCase();
                 matchesText = text.includes(this.searchQuery.toLowerCase());
             }
             
-            // 2. Set Filter
             const matchesSet = this.filterSet === '' || set.toLowerCase() === this.filterSet.toLowerCase();
-            
-            // 3. Hunt Mode Logic (If Hunt Mode is ON, hide cards where the user owns every variant)
             const matchesHunt = this.huntMode ? !isCompletelyOwned : true;
 
             return matchesText && matchesSet && matchesHunt;
