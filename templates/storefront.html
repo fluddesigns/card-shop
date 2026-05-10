@@ -40,16 +40,16 @@
                 </h1>
                 <p class="text-muted mb-0">{{ stats.total }} Total Cards ({{ stats.unique }} Unique Master Artworks)</p>
             </div>
-            </div>
+        </div>
 
         <div class="row g-2 align-items-center">
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="input-group">
                     <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-search"></i></span>
                     <input type="text" class="form-control border-start-0 ps-0" placeholder="Search cards..." x-model="searchQuery">
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <select class="form-select" x-model="filterSet">
                     <option value="">All Expansion Sets</option>
                     {% set unique_sets = [] %}
@@ -61,14 +61,26 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="col-md-4">
+                <select class="form-select border-primary" x-model="filterStatus">
+                    <option value="all">All Inventory</option>
+                    <option value="for_sale">For Sale / Trade Only</option>
+                    <option value="personal">Personal Collection Only</option>
+                </select>
+            </div>
         </div>
     </div>
 
     <div class="binder-grid">
         {% for master in master_cards %}
             
+            {% set card_statuses = [] %}
+            {% for physical_item in owned_dict[master.id] %}
+                {% set _ = card_statuses.append(physical_item.status) %}
+            {% endfor %}
+
             <div class="d-flex flex-column align-items-center text-center" 
-                 x-show="isVisible('{{ master.name|lower|replace("'", "\\'") }}', '{{ master.expansion_set.name|lower|replace("'", "\\'") }}')"
+                 x-show='isVisible("{{ master.name|lower|replace('"', '\\"') }}", "{{ master.expansion_set.name|lower|replace('"', '\\"') }}", {{ card_statuses | tojson }})'
                  x-transition>
                 
                 <img src="{{ master.image_url }}" alt="{{ master.name }}" class="tcg-card-img" loading="lazy">
@@ -83,8 +95,11 @@
 
                 <div class="w-100 mt-2 d-flex flex-column gap-1">
                     {% for physical_item in owned_dict[master.id] %}
+                        
                         <span class="badge w-100 py-2 d-flex justify-content-between align-items-center shadow-sm 
-                            {% if physical_item.status == 'personal_collection' %}bg-secondary{% else %}bg-success{% endif %}">
+                            {% if physical_item.status == 'personal_collection' %}bg-secondary{% else %}bg-success{% endif %}"
+                            x-show="showBadge('{{ physical_item.status }}')"
+                            x-transition>
                             
                             <span class="fw-semibold text-start">
                                 {{ physical_item.variant|title }} 
@@ -122,19 +137,36 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('publicBinder', () => ({
         searchQuery: '',
         filterSet: '',
+        filterStatus: 'all', // Matches the default dropdown value
         
-        isVisible(name, set) {
-            // Text Search
+        isVisible(name, set, statuses) {
+            // 1. Text Search
             let matchesText = true;
             if (this.searchQuery !== '') {
                 const text = (name + " " + set).toLowerCase();
                 matchesText = text.includes(this.searchQuery.toLowerCase());
             }
             
-            // Set Filter
+            // 2. Set Filter
             const matchesSet = this.filterSet === '' || set.toLowerCase() === this.filterSet.toLowerCase();
 
-            return matchesText && matchesSet;
+            // 3. Status Filter (Evaluates if the card has AT LEAST ONE physical item matching the filter)
+            let matchesStatus = true;
+            if (this.filterStatus === 'for_sale') {
+                matchesStatus = statuses.some(status => status !== 'personal_collection');
+            } else if (this.filterStatus === 'personal') {
+                matchesStatus = statuses.some(status => status === 'personal_collection');
+            }
+
+            return matchesText && matchesSet && matchesStatus;
+        },
+
+        // Evaluates visibility for the specific variant badges under the card
+        showBadge(status) {
+            if (this.filterStatus === 'all') return true;
+            if (this.filterStatus === 'for_sale') return status !== 'personal_collection';
+            if (this.filterStatus === 'personal') return status === 'personal_collection';
+            return true;
         }
     }));
 });
