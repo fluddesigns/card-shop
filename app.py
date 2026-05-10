@@ -424,13 +424,50 @@ def user_storefront(username):
     user = User.query.filter_by(username=username).first_or_404()
     settings = StorefrontSettings.query.filter_by(user_id=user.id).first()
     
-    # Fetch only items marked for Sales, ordered by highest price first
-    inventory = Inventory.query.join(MasterCard).filter(
-        Inventory.user_id == user.id,
-        Inventory.status == 'Sales'
-    ).order_by(Inventory.acquired_price.desc()).all()
+    # 1. Determine if this user allows prices to be shown at all
+    show_prices_globally = settings.show_prices if settings else False
     
-    return render_template('storefront.html', user=user, inventory=inventory, settings=settings)
+    # 2. Fetch ALL inventory for this user (not just sales)
+    inventory_items = Inventory.query.filter_by(user_id=user.id).all()
+    
+    if not inventory_items:
+        # Handle empty binders gracefully
+        return render_template('storefront.html', user=user, master_cards=[], owned_dict={}, stats={'total': 0})
+
+    # 3. Get the unique Master Cards so we can build the grid
+    master_ids = list(set([item.master_card_id for item in inventory_items]))
+    master_cards = MasterCard.query.join(ExpansionSet).filter(
+        MasterCard.id.in_(master_ids)
+    ).order_by(ExpansionSet.release_date.desc()).all()
+    
+    # 4. Group the physical inventory under their Master Cards and apply pricing logic
+    owned_dict = {}
+    for item in inventory_items:
+        if item.master_card_id not in owned_dict:
+            owned_dict[item.master_card_id] = []
+            
+        # Pricing Logic: Only show if it's NOT personal collection AND settings allow it
+        display_price = None
+        if item.status != 'personal_collection' and show_prices_globally:
+            display_price = item.acquired_price
+            
+        owned_dict[item.master_card_id].append({
+            'variant': item.variant.lower().strip(),
+            'status': item.status,
+            'price': display_price,
+            'condition': item.condition
+        })
+
+    stats = {
+        'total': len(inventory_items),
+        'unique': len(master_cards)
+    }
+
+    return render_template('storefront.html', 
+                           owner=user, 
+                           master_cards=master_cards, 
+                           owned_dict=owned_dict,
+                           stats=stats)
 
 @app.route('/u/<username>/qr')
 def user_qr(username):
