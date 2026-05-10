@@ -1593,7 +1593,28 @@ def hunt_mode(species):
 
     return render_template('hunt_mode.html', species=species.capitalize(), targets=hunt_targets)
 
-# Add this near your other routes in app.py
+@app.route('/api/check-email', methods=['POST'])
+def check_email():
+    email = request.form.get('email', '').lower().strip()
+    # Ensure they've typed at least part of an email
+    if not email or '@' not in email: 
+        return '<div class="form-text small mt-1">We\'ll send a secure verification link.</div>'
+    
+    if User.query.filter_by(email=email).first():
+        return '<div class="form-text small mt-1 text-danger fw-bold"><i class="bi bi-x-circle me-1"></i>Email is already registered.</div>'
+    
+    return '<div class="form-text small mt-1 text-success fw-bold"><i class="bi bi-check-circle me-1"></i>Email is available!</div>'
+    
+@app.route('/api/check-username', methods=['POST'])
+def check_username():
+    username = request.form.get('username', '').lower().strip()
+    if len(username) < 3: 
+        return '<div class="form-text small mt-1">Your public URL. No spaces.</div>'
+        
+    if User.query.filter_by(username=username).first():
+        return '<div class="form-text small mt-1 text-danger fw-bold"><i class="bi bi-x-circle me-1"></i>Profile ID is taken.</div>'
+        
+    return '<div class="form-text small mt-1 text-success fw-bold"><i class="bi bi-check-circle me-1"></i>Profile ID is available!</div>'
 
 @app.route('/pos')
 @login_required

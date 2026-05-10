@@ -1,41 +1,133 @@
 ﻿{% extends "base.html" %}
-{% block title %}Register{% endblock %}
+{% block title %}Setup Your Binder | Flud Media TCG{% endblock %}
+
 {% block content %}
-<div class="container mt-5" style="max-width:400px">
-    <div class="card shadow">
-        <div class="card-body p-4">
-            <h4 class="text-center mb-3">Create Account</h4>
+<div class="container mt-5 mb-5" style="max-width:550px" x-data="registerForm()">
+    <div class="card shadow-lg border-0 rounded-4 bg-body">
+        <div class="card-body p-sm-5 p-4">
+            
+            <div class="text-center mb-4">
+                <div class="bg-danger text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3 shadow" style="width: 70px; height: 70px;">
+                    <i class="bi bi-journal-bookmark-fill fs-1"></i>
+                </div>
+                <h2 class="fw-bold brand-text mb-1">Setup Your Binder</h2>
+                <p class="text-muted">Create your Personal Collection & Trading Profile</p>
+            </div>
+
             {% with m=get_flashed_messages() %}
-            {% if m %}<div class="alert alert-warning">{{ m[0] }}</div>{% endif %}
+            {% if m %}<div class="alert alert-warning rounded-3 border-warning border-start border-4 shadow-sm"><i class="bi bi-exclamation-triangle me-2"></i>{{ m[0] }}</div>{% endif %}
             {% endwith %}
+
             <form method="POST">
-                <!-- Honeypot for bots (Hidden) -->
                 <div style="display:none!important;">
-                    <label>Keep this field blank</label>
                     <input type="text" name="hp_check" tabindex="-1" autocomplete="off">
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Username (Store Name)</label>
-                    <input type="text" name="username" class="form-control" placeholder="e.g. PokeMaster99" required autofocus>
-                    <div class="form-text small">This will be your public shop URL.</div>
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold text-uppercase">Email Address</label>
+                    <div class="input-group shadow-sm">
+                        <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-envelope text-muted"></i></span>
+                        <input type="email" name="email" class="form-control border-start-0 ps-0 fw-semibold" placeholder="trainer@example.com" required autofocus
+                               hx-post="/api/check-email" 
+                               hx-trigger="keyup changed delay:500ms" 
+                               hx-target="#email-feedback">
+                    </div>
+                    <div id="email-feedback" class="form-text small mt-1">We'll send a secure verification link.</div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Password</label>
-                    <input type="password" name="password" class="form-control" required>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small fw-bold text-uppercase">Display Name</label>
+                        <div class="input-group shadow-sm">
+                            <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-person-badge text-muted"></i></span>
+                            <input type="text" name="display_name" class="form-control border-start-0 ps-0 fw-semibold" placeholder="Ash Ketchum" required>
+                        </div>
+                        <div class="form-text small mt-1">How you appear to others.</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small fw-bold text-uppercase">Profile ID</label>
+                        <div class="input-group shadow-sm">
+                            <span class="input-group-text bg-body-secondary border-end-0 fw-bold text-primary">/u/</span>
+                            <input type="text" name="username" class="form-control border-start-0 ps-0 fw-semibold" placeholder="ashketchum" required pattern="[a-zA-Z0-9_-]+" title="Only letters, numbers, dashes, and underscores."
+                                   hx-post="/api/check-username" 
+                                   hx-trigger="keyup changed delay:500ms" 
+                                   hx-target="#username-feedback">
+                        </div>
+                        <div id="username-feedback" class="form-text small mt-1">Your public URL. No spaces.</div>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Confirm Password</label>
-                    <input type="password" name="confirm_password" class="form-control" required>
+
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold text-uppercase">Password</label>
+                    <div class="input-group mb-2 shadow-sm">
+                        <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-lock text-muted"></i></span>
+                        <input :type="showPassword ? 'text' : 'password'" name="password" class="form-control border-start-0 border-end-0 px-0 fw-semibold" required x-model="password">
+                        <button class="btn btn-body-secondary border-start-0 border border-secondary-subtle" type="button" @click="showPassword = !showPassword">
+                            <i class="bi" :class="showPassword ? 'bi-eye-slash' : 'bi-eye'"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="progress mt-2 bg-body-secondary" style="height: 6px;" x-show="password.length > 0" x-cloak>
+                        <div class="progress-bar transition-all" :class="strengthColor" :style="`width: ${(strength / 4) * 100}%`"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1" x-show="password.length > 0" x-cloak>
+                        <small class="text-muted" style="font-size: 0.75rem;">Requires 8+ chars, numbers & symbols.</small>
+                        <small class="fw-bold" :class="strengthColor.replace('bg-', 'text-')" x-text="strengthText"></small>
+                    </div>
                 </div>
-                <div class="d-grid">
-                    <button type="submit" class="btn btn-success">Register</button>
+
+                <div class="form-check mb-4 mt-2">
+                    <input class="form-check-input border-secondary" type="checkbox" required id="termsCheck">
+                    <label class="form-check-label small text-muted" for="termsCheck">
+                        I agree to the <a href="#" class="text-decoration-none">Terms of Service</a> and confirm I am tracking genuine physical inventory.
+                    </label>
                 </div>
-                <div class="text-center mt-3">
-                    <a href="{{ url_for('login') }}" class="small">Already have an account?</a>
+
+                <div class="d-grid mt-4">
+                    <button type="submit" class="btn btn-danger btn-lg fw-bold shadow-sm" :disabled="password.length > 0 && strength < 2">
+                        <i class="bi bi-journal-plus me-2"></i>Create Binder
+                    </button>
                 </div>
             </form>
         </div>
+        <div class="card-footer bg-body-secondary border-0 text-center py-3 rounded-bottom-4">
+            <span class="text-muted small">Already a registered trainer?</span>
+            <a href="{{ url_for('login') }}" class="fw-bold text-decoration-none ms-1">Login here</a>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('registerForm', () => ({
+            password: '',
+            showPassword: false,
+            
+            // Calculate password complexity dynamically
+            get strength() {
+                let score = 0;
+                if (this.password.length >= 8) score++;
+                if (/[A-Z]/.test(this.password)) score++;
+                if (/[0-9]/.test(this.password)) score++;
+                if (/[^A-Za-z0-9]/.test(this.password)) score++;
+                return score;
+            },
+            get strengthColor() {
+                if (this.strength <= 1) return 'bg-danger';
+                if (this.strength === 2) return 'bg-warning';
+                if (this.strength === 3) return 'bg-info';
+                return 'bg-success';
+            },
+            get strengthText() {
+                if (this.strength <= 1) return 'Weak';
+                if (this.strength === 2) return 'Fair';
+                if (this.strength === 3) return 'Good';
+                return 'Strong';
+            }
+        }));
+    });
+</script>
 {% endblock %}
