@@ -1376,8 +1376,7 @@ def pokedex_binder(species):
         Inventory.master_card_id.in_(master_ids)
     ).all()
 
-    # 3. Group the user's owned inventory by MasterCard ID for the UI to easily read
-    # We store the 'variant' (Normal, Reverse Holo, etc.) so the UI knows what finishes you have
+    # 3. Group the user's owned inventory by MasterCard ID
     owned_dict = {}
     for item in owned_inventory:
         if item.master_card_id not in owned_dict:
@@ -1387,10 +1386,31 @@ def pokedex_binder(species):
         if finish_clean not in owned_dict[item.master_card_id]:
             owned_dict[item.master_card_id].append(finish_clean)
 
-    return render_template('pokedex_binder.html', 
+    # 4. Calculate Stats for the Dashboard Header
+    total_variants = 0
+    owned_variants = 0
+    
+    for master in master_cards:
+        available_finishes = [f.strip().lower() for f in master.variant_type.split(',')] if master.variant_type else ['normal']
+        total_variants += len(available_finishes)
+        
+        owned = owned_dict.get(master.id, [])
+        owned_variants += len([f for f in available_finishes if f in owned])
+        
+    percent = int((owned_variants / total_variants) * 100) if total_variants > 0 else 0
+    
+    stats = {
+        'percent': percent,
+        'total': total_variants,
+        'owned': owned_variants
+    }
+
+    # 5. Render the new unified template
+    return render_template('species_dashboard.html', 
                            species=species.title(), 
                            master_cards=master_cards, 
-                           owned_dict=owned_dict)
+                           owned_dict=owned_dict,
+                           stats=stats)
 
 @app.route('/api/toggle_favorite', methods=['POST'])
 @login_required
@@ -1579,43 +1599,6 @@ def force_api_fetch():
         flash(f"❌ Error fetching card: {str(e)}")
         
     return redirect(url_for('admin'))
-
-@app.route('/hunt/<species>')
-@login_required
-def hunt_mode(species):
-    # THE FIX: Wildcard search for Hunt Mode
-    master_cards = CardReference.query.filter(
-        CardReference.name.ilike(f"%{species}%")
-    ).order_by(CardReference.release_date.asc()).all()
-
-    ref_ids = [c.id for c in master_cards]
-    owned_cards = Card.query.filter(
-        Card.user_id == current_user.id,
-        Card.reference_id.in_(ref_ids)
-    ).all()
-
-    owned_dict = {}
-    for oc in owned_cards:
-        if oc.reference_id not in owned_dict:
-            owned_dict[oc.reference_id] = []
-        owned_dict[oc.reference_id].append(oc.finish.lower())
-
-    hunt_targets = []
-    for ref in master_cards:
-        if not ref.available_finishes:
-            continue
-            
-        available = [f.strip() for f in ref.available_finishes.split(',')]
-        owned = owned_dict.get(ref.id, [])
-        missing = [f for f in available if f.lower() not in owned]
-        
-        if missing:
-            hunt_targets.append({
-                'ref': ref,
-                'missing_finishes': missing
-            })
-
-    return render_template('hunt_mode.html', species=species.capitalize(), targets=hunt_targets)
 
 @app.route('/api/check-email', methods=['POST'])
 def check_email():
