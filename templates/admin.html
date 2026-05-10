@@ -378,10 +378,6 @@
         <div class="col-12 mt-4 text-end">
             <button type="submit" class="btn btn-danger btn-lg px-5 w-100 w-md-auto fw-bold shadow-sm">Save Card</button>
         </div>
-        
-        <div class="col-12 mt-4 text-end">
-            <button type="submit" class="btn btn-danger btn-lg px-5 w-100 w-md-auto fw-bold shadow-sm">Save Card</button>
-        </div>
     </form>
 </div>
 
@@ -537,6 +533,7 @@
         selectedSet: '',
         selectedNumber: '',
         suggestions: [],
+        isGraded: false,
         
         async fetchSuggestions() {
             if (this.query.length < 2) {
