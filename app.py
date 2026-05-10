@@ -5,7 +5,7 @@ import requests
 import urllib3
 import threading
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -13,6 +13,7 @@ from flask_session import Session
 from flask_mail import Mail, Message
 from sqlalchemy import text
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+from functools import wraps
 
 # Suppress InsecureRequestWarning for local dev if SSL certs are missing
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -77,6 +78,19 @@ class User(UserMixin, db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+def super_user_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # First check if they are logged in at all
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        # Then check if they possess the super user flag
+        if not current_user.is_admin:
+            flash("Unauthorized: Super User privileges required.", "error")
+            return redirect(url_for('admin')) # Kick them back to their own dashboard
+        return f(*args, **kwargs)
+    return decorated_function
 
 class StorefrontSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -584,7 +598,7 @@ def run_full_sync(app_context):
 
 
 @app.route('/admin/sync_db', methods=['POST'])
-@login_required
+@super_user_required
 def sync_db():
     if not current_user.is_admin:
         return redirect(url_for('admin'))
@@ -925,7 +939,7 @@ def sales():
     return render_template('sales.html', sales=sales_history, total=total_revenue)
 
 @app.route('/super_admin')
-@login_required
+@super_user_required
 def super_admin():
     if not current_user.is_admin:
         flash("Unauthorized")
@@ -1469,7 +1483,7 @@ def force_variant():
     return redirect(url_for('admin'))
 
 @app.route('/api/force_api_fetch', methods=['POST'])
-@login_required
+@super_user_required
 def force_api_fetch():
     # 🔒 SECURITY CHECK: Kick out non-admins immediately
     if not current_user.is_admin:
