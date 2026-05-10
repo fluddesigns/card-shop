@@ -268,61 +268,83 @@
                 
                 <div class="tab-content p-4">
                     <div class="tab-pane fade show active" id="tabManual">
-                        <form action="{{ url_for('add_card') }}" method="POST" class="row g-3">
-                            
-                            <div class="col-md-6">
-                                <label class="form-label text-muted small fw-bold text-uppercase">Card Name</label>
-                                <input type="text" id="inputName" name="card_name" class="form-control fw-bold" required>
+    <form action="{{ url_for('add_card') }}" method="POST" class="row g-3" x-data="addCardAutocomplete()">
+        
+        <div class="col-md-6 position-relative">
+            <label class="form-label text-muted small fw-bold text-uppercase">Card Name</label>
+            <input type="text" name="card_name" class="form-control fw-bold" required autocomplete="off"
+                   x-model="query" 
+                   @input.debounce.300ms="fetchSuggestions" 
+                   @click.outside="suggestions = []">
+            
+            <ul class="dropdown-menu w-100 shadow-lg" :class="suggestions.length > 0 ? 'show' : ''" style="position: absolute; top: 100%; left: 0; z-index: 1050; max-height: 300px; overflow-y: auto;">
+                <template x-for="item in suggestions" :key="item.id">
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center py-2 border-bottom" href="#" @click.prevent="selectCard(item)">
+                            <img :src="item.image || ''" style="width: 40px; height: 55px; object-fit: contain;" class="me-3 rounded bg-light">
+                            <div>
+                                <div class="fw-bold" x-text="item.name"></div>
+                                <small class="text-muted"><span x-text="item.set"></span> • #<span x-text="item.number"></span></small>
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label text-muted small fw-bold text-uppercase">Set Name</label>
-                                <input type="text" id="inputSet" name="set_name" class="form-control" required>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label text-muted small fw-bold text-uppercase">Card #</label>
-                                <input type="text" id="inputNumber" name="card_number" class="form-control">
-                            </div>
+                        </a>
+                    </li>
+                </template>
+                <li x-show="suggestions.length === 0 && query.length >= 2" class="p-3 text-muted small text-center">
+                    No exact matches found.
+                </li>
+            </ul>
+        </div>
+        
+        <div class="col-md-4">
+            <label class="form-label text-muted small fw-bold text-uppercase">Set Name</label>
+            <input type="text" name="set_name" class="form-control" required x-model="selectedSet">
+        </div>
+        
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold text-uppercase">Card #</label>
+            <input type="text" name="card_number" class="form-control" x-model="selectedNumber">
+        </div>
 
-                            <div class="col-md-3">
-                                <label class="form-label text-muted small fw-bold text-uppercase">Condition</label>
-                                <select name="condition" class="form-select border-primary fw-bold">
-                                    <option value="NM" selected>Near Mint (NM)</option>
-                                    <option value="LP">Lightly Played (LP)</option>
-                                    <option value="MP">Moderately Played (MP)</option>
-                                    <option value="HP">Heavily Played (HP)</option>
-                                    <option value="DMG">Damaged (DMG)</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label text-muted small fw-bold text-uppercase">Finish / Rarity</label>
-                                <select name="finish" class="form-select">
-                                    <option value="Normal">Normal</option>
-                                    <option value="Holofoil">Holofoil</option>
-                                    <option value="Reverse Holofoil">Reverse Holofoil</option>
-                                    <option value="1st Edition">1st Edition</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label text-muted small fw-bold text-uppercase">Price ($)</label>
-                                <input type="number" step="0.01" name="price" class="form-control text-success fw-bold">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label text-muted small fw-bold text-uppercase">Qty</label>
-                                <input type="number" name="quantity" value="1" class="form-control text-center fw-bold">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label text-muted small fw-bold text-uppercase">Destination</label>
-                                <select name="status" class="form-select border-success">
-                                    <option value="personal_collection" selected>Binder</option>
-                                    <option value="Sales">Sales</option>
-                                </select>
-                            </div>
-                            
-                            <div class="col-12 mt-4 text-end">
-                                <button type="submit" class="btn btn-danger btn-lg px-5 w-100 w-md-auto fw-bold shadow-sm">Save Card</button>
-                            </div>
-                        </form>
-                    </div>
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold text-uppercase">Condition</label>
+            <select name="condition" class="form-select border-primary fw-bold">
+                <option value="NM" selected>Near Mint (NM)</option>
+                <option value="LP">Lightly Played (LP)</option>
+                <option value="MP">Moderately Played (MP)</option>
+                <option value="HP">Heavily Played (HP)</option>
+                <option value="DMG">Damaged (DMG)</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-bold text-uppercase">Finish / Rarity</label>
+            <select name="finish" class="form-select">
+                <option value="Normal">Normal</option>
+                <option value="Holofoil">Holofoil</option>
+                <option value="Reverse Holofoil">Reverse Holofoil</option>
+                <option value="1st Edition">1st Edition</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold text-uppercase">Price ($)</label>
+            <input type="number" step="0.01" name="price" class="form-control text-success fw-bold">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold text-uppercase">Qty</label>
+            <input type="number" name="quantity" value="1" class="form-control text-center fw-bold">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold text-uppercase">Destination</label>
+            <select name="status" class="form-select border-success">
+                <option value="personal_collection" selected>Binder</option>
+                <option value="Sales">Sales</option>
+            </select>
+        </div>
+        
+        <div class="col-12 mt-4 text-end">
+            <button type="submit" class="btn btn-danger btn-lg px-5 w-100 w-md-auto fw-bold shadow-sm">Save Card</button>
+        </div>
+    </form>
+</div>
 
                     <div class="tab-pane fade" id="tabPaste">
                         <form action="{{ url_for('paste_import') }}" method="POST">
@@ -438,6 +460,37 @@
                 }
             }
         }));
+        // Add this right below Alpine.data('inventoryApp', ...);
+
+    Alpine.data('addCardAutocomplete', () => ({
+        query: '',
+        selectedSet: '',
+        selectedNumber: '',
+        suggestions: [],
+        
+        async fetchSuggestions() {
+            if (this.query.length < 2) {
+                this.suggestions = [];
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/search_reference?q=${encodeURIComponent(this.query)}`);
+                if (response.ok) {
+                    this.suggestions = await response.json();
+                }
+            } catch (error) {
+                console.error("Failed to fetch card suggestions:", error);
+            }
+        },
+
+        selectCard(item) {
+            this.query = item.name;
+            this.selectedSet = item.set;
+            this.selectedNumber = item.number;
+            this.suggestions = []; // Close the dropdown
+        }
+    }));
     });
 </script>
 {% endblock %}
