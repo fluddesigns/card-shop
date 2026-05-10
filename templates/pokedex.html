@@ -1,80 +1,183 @@
 {% extends "base.html" %}
-{% block title %}My Pokedex{% endblock %}
+{% block title %}Master Sets Hub | Flud Media TCG{% endblock %}
+
+{% block styles %}
+<style>
+    .hub-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+    .tracker-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        text-decoration: none;
+        color: inherit;
+    }
+    .tracker-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15) !important;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-        <h1 class="fw-bold mb-0">📕 Pokedex Hub</h1>
-        <div class="d-flex flex-column flex-sm-row gap-2">
-            <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#addFavoriteModal">
-                ➕ Track New Master Set
-            </button>
-            <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary w-100 text-center">Back to Inventory</a>
+<div class="container py-4" x-data="pokedexHub()">
+    
+    <div class="bg-body rounded-4 shadow-sm p-4 mb-4 border-top border-4 border-primary">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+            <div>
+                <h1 class="fw-bold mb-0 d-flex align-items-center gap-2">
+                    <i class="bi bi-journal-album text-primary"></i> 
+                    Master Sets
+                </h1>
+                <p class="text-muted mb-0">Track your progress across umbrella species.</p>
+            </div>
+            
+            <form action="{{ url_for('toggle_favorite') }}" method="POST" class="d-flex gap-2">
+                <input type="text" name="species_name" class="form-control border-primary" placeholder="e.g. Gengar" required>
+                <button type="submit" class="btn btn-primary fw-bold px-4 text-nowrap"><i class="bi bi-plus-lg"></i> Track</button>
+            </form>
+        </div>
+
+        <div class="row g-3 align-items-center">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control border-start-0 ps-0" placeholder="Search tracked species..." x-model="searchQuery">
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-arrow-down-up"></i></span>
+                    <select class="form-select border-start-0 border-end-0" x-model="sortBy">
+                        <option value="name">Sort: Species Name</option>
+                        <option value="percent">Sort: Completion %</option>
+                        <option value="owned">Sort: Cards Owned</option>
+                        <option value="total">Sort: Total Database Slots</option>
+                    </select>
+                    <button class="btn btn-outline-secondary px-3" @click="sortDesc = !sortDesc" title="Toggle Sort Direction">
+                        <i class="bi fw-bold" :class="sortDesc ? 'bi-sort-down-alt' : 'bi-sort-down'"></i>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-info alert-dismissible fade show shadow-sm" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <div class="row g-4">
+    <div class="hub-grid">
         {% for stat in stats %}
-        <div class="col-md-6 col-xl-4">
-            <div class="card shadow-sm h-100 border-0 border-top border-danger border-4">
-                <div class="card-body d-flex flex-column">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <h4 class="card-title fw-bold mb-0">{{ stat.name }}</h4>
-                        <span class="badge bg-dark fs-6">{{ stat.percent }}%</span>
-                    </div>
-                    
-                    <p class="text-muted small mb-2">Variants Collected: {{ stat.owned }} / {{ stat.total }}</p>
-                    
-                    <div class="progress mb-4" style="height: 10px;">
-                        <div class="progress-bar bg-danger progress-bar-striped progress-bar-animated" role="progressbar" style="width: {{ stat.percent }}%"></div>
+            <a href="{{ url_for('pokedex_binder', species=stat.name) }}" 
+               class="card tracker-card shadow-sm border-0 bg-body h-100"
+               x-show="isVisible('{{ stat.name|lower|replace("'", "\\'") }}')"
+               x-transition
+               :style="{ order: sortedOrder['{{ loop.index }}'] }">
+                
+                <div class="card-body p-4 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h3 class="fw-bold mb-0 text-truncate">{{ stat.name }}</h3>
+                        <span class="badge {% if stat.percent == 100 %}bg-success{% elif stat.percent >= 50 %}bg-primary{% else %}bg-secondary{% endif %} fs-6 rounded-pill">
+                            {{ stat.percent }}%
+                        </span>
                     </div>
 
                     <div class="mt-auto">
-                        <a href="{{ url_for('pokedex_binder', species=stat.name) }}" class="btn btn-danger w-100 fw-bold d-flex align-items-center justify-content-center shadow-sm">
-                            <i class="bi bi-book me-2"></i> Open Master Set
-                        </a>
+                        <div class="d-flex justify-content-between text-muted small fw-bold mb-1">
+                            <span>Progress</span>
+                            <span>{{ stat.owned }} / {{ stat.total }} Variants</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar {% if stat.percent == 100 %}bg-success{% else %}bg-primary{% endif %} progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" 
+                                 style="width: {{ stat.percent }}%;"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-        {% else %}
-        <div class="col-12 text-center py-5">
-            <h3 class="text-muted">No Master Sets tracked yet.</h3>
-            <p>Click "Track New Master Set" to start building your Pokedex.</p>
-        </div>
+                
+                <form action="{{ url_for('toggle_favorite') }}" method="POST" class="position-absolute top-0 end-0 p-2" @click.stop>
+                    <input type="hidden" name="species_name" value="{{ stat.name }}">
+                    <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Stop Tracking" onclick="return confirm('Stop tracking {{ stat.name }}?')">
+                        <i class="bi bi-x-circle-fill fs-5 opacity-50 hover-opacity-100"></i>
+                    </button>
+                </form>
+            </a>
         {% endfor %}
+
+        {% if not stats %}
+        <div class="col-12 text-center py-5">
+            <h3 class="text-muted">You aren't tracking any Master Sets yet.</h3>
+            <p class="text-muted">Use the input above to start hunting a species!</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 
-<div class="modal fade" id="addFavoriteModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title">Track a New Pokémon</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form action="{{ url_for('toggle_favorite') }}" method="POST">
-                    <div class="mb-3">
-                        <label class="form-label">Pokémon Name</label>
-                        <input type="text" name="species_name" class="form-control" placeholder="e.g. Gengar, Ariados, Spinarak" required>
-                        <div class="form-text">This will scan the dictionary and track every variant ever printed.</div>
-                    </div>
-                    <button type="submit" class="btn btn-danger w-100 py-2">Start Tracking</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 1. Build a JavaScript array of stats directly from the Jinja context
+const hubStats = [
+    {% for stat in stats %}
+        {
+            id: '{{ loop.index }}',
+            name: '{{ stat.name|lower|replace("'", "\\'") }}',
+            percent: {{ stat.percent }},
+            owned: {{ stat.owned }},
+            total: {{ stat.total }}
+        }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+document.addEventListener('alpine:init', () => {
+    Alpine.data('pokedexHub', () => ({
+        searchQuery: '',
+        
+        // Sorting State
+        sortBy: 'name', 
+        sortDesc: false, 
+        trackerData: hubStats,
+
+        init() {
+            // Smart auto-flip: If they switch to a numeric metric, default to highest first
+            this.$watch('sortBy', value => {
+                if (value === 'percent' || value === 'owned' || value === 'total') {
+                    this.sortDesc = true; 
+                } else {
+                    this.sortDesc = false; // Alphabetical A-Z
+                }
+            });
+        },
+
+        // Calculates the display order and applies it via CSS Grid Order
+        get sortedOrder() {
+            let sorted = [...this.trackerData].sort((a, b) => {
+                let valA = a[this.sortBy];
+                let valB = b[this.sortBy];
+
+                // Tie-breaker fallback
+                if (valA === valB) {
+                    return a.name.localeCompare(b.name);
+                }
+
+                if (this.sortDesc) {
+                    return valA < valB ? 1 : -1;
+                } else {
+                    return valA > valB ? 1 : -1;
+                }
+            });
+
+            // Create a lookup map: { 'loop_index': new_order_index }
+            let orderMap = {};
+            sorted.forEach((item, index) => {
+                orderMap[item.id] = index;
+            });
+            return orderMap;
+        },
+        
+        isVisible(name) {
+            if (this.searchQuery === '') return true;
+            return name.includes(this.searchQuery.toLowerCase());
+        }
+    }));
+});
+</script>
 {% endblock %}

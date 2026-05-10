@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}My Pokedex{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <h1 class="fw-bold mb-0">📕 Pokedex Hub</h1>
+        <div class="d-flex flex-column flex-sm-row gap-2">
+            <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#addFavoriteModal">
+                ➕ Track New Master Set
+            </button>
+            <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary w-100 text-center">Back to Inventory</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-info alert-dismissible fade show shadow-sm" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row g-4">
+        {% for stat in stats %}
+        <div class="col-md-6 col-xl-4">
+            <div class="card shadow-sm h-100 border-0 border-top border-danger border-4">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h4 class="card-title fw-bold mb-0">{{ stat.name }}</h4>
+                        <span class="badge bg-dark fs-6">{{ stat.percent }}%</span>
+                    </div>
+                    
+                    <p class="text-muted small mb-2">Variants Collected: {{ stat.owned }} / {{ stat.total }}</p>
+                    
+                    <div class="progress mb-4" style="height: 10px;">
+                        <div class="progress-bar bg-danger progress-bar-striped progress-bar-animated" role="progressbar" style="width: {{ stat.percent }}%"></div>
+                    </div>
+
+                    <div class="mt-auto">
+                        <a href="{{ url_for('pokedex_binder', species=stat.name) }}" class="btn btn-danger w-100 fw-bold d-flex align-items-center justify-content-center shadow-sm">
+                            <i class="bi bi-book me-2"></i> Open Master Set
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center py-5">
+            <h3 class="text-muted">No Master Sets tracked yet.</h3>
+            <p>Click "Track New Master Set" to start building your Pokedex.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="modal fade" id="addFavoriteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Track a New Pokémon</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('toggle_favorite') }}" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Pokémon Name</label>
+                        <input type="text" name="species_name" class="form-control" placeholder="e.g. Gengar, Ariados, Spinarak" required>
+                        <div class="form-text">This will scan the dictionary and track every variant ever printed.</div>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100 py-2">Start Tracking</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
