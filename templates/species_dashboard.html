@@ -112,37 +112,40 @@
             {% set is_completely_owned = (missing_finishes|length == 0) %}
             {% set has_any_variant = (owned_finishes|length > 0) %}
 
-            <div class="d-flex flex-column align-items-center text-center {% if not has_any_variant %}not-owned{% endif %}" 
+            <div x-show="isVisible('{{ master.name|lower|replace("'", "\\'") }}', '{{ master.expansion_set.name|lower|replace("'", "\\'") }}', {{ 'true' if is_completely_owned else 'false' }})"
+                 x-transition
                  id="wrapper-{{ master.id }}"
-                 x-show="isVisible('{{ master.name|lower|replace("'", "\\'") }}', '{{ master.expansion_set.name|lower|replace("'", "\\'") }}', {{ 'true' if is_completely_owned else 'false' }})"
-                 x-transition>
+                 class="{% if not has_any_variant %}not-owned{% endif %}">
                 
-                <img src="{{ master.image_url }}" alt="{{ master.name }}" class="tcg-card-img" loading="lazy" data-bs-toggle="modal" data-bs-target="#cardModal{{ master.id }}">
-                
-                <div class="mt-2 w-100">
-                    <div class="fw-bold text-truncate" style="font-size: 0.9rem;">{{ master.name }}</div>
-                    <div class="text-muted d-flex justify-content-between px-2" style="font-size: 0.75rem;">
-                        <span>{{ master.expansion_set.name }}</span>
-                        <span>#{{ master.card_number }}</span>
+                <div class="d-flex flex-column align-items-center text-center">
+                    
+                    <img src="{{ master.image_url }}" alt="{{ master.name }}" class="tcg-card-img" loading="lazy" data-bs-toggle="modal" data-bs-target="#cardModal{{ master.id }}">
+                    
+                    <div class="mt-2 w-100">
+                        <div class="fw-bold text-truncate" style="font-size: 0.9rem;">{{ master.name }}</div>
+                        <div class="text-muted d-flex justify-content-between px-2" style="font-size: 0.75rem;">
+                            <span>{{ master.expansion_set.name }}</span>
+                            <span>#{{ master.card_number }}</span>
+                        </div>
                     </div>
-                </div>
 
-                <div class="variant-badges w-100 mt-1 d-flex flex-wrap justify-content-center gap-1" x-show="!huntMode">
-                    {% for finish in clean_available %}
-                        <span class="badge bg-secondary badge-variant {% if finish in owned_finishes %}owned{% endif %}" data-master="{{ master.id }}" data-finish="{{ finish }}">
-                            {{ finish|title }}
-                        </span>
-                    {% endfor %}
-                </div>
+                    <div class="variant-badges w-100 mt-1 d-flex flex-wrap justify-content-center gap-1" x-show="!huntMode">
+                        {% for finish in clean_available %}
+                            <span class="badge bg-secondary badge-variant {% if finish in owned_finishes %}owned{% endif %}" data-master="{{ master.id }}" data-finish="{{ finish }}">
+                                {{ finish|title }}
+                            </span>
+                        {% endfor %}
+                    </div>
 
-                <div class="w-100 mt-2 d-flex flex-column gap-1" x-show="huntMode" x-cloak>
-                    {% for finish in missing_finishes %}
-                        <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm d-flex justify-content-between align-items-center px-2 quick-capture-btn" 
-                                data-master="{{ master.id }}" data-finish="{{ finish|title }}">
-                            <span>{{ finish|title }}</span>
-                            <i class="bi bi-plus-circle-fill"></i>
-                        </button>
-                    {% endfor %}
+                    <div class="w-100 mt-2 d-flex flex-column gap-1" x-show="huntMode" x-cloak>
+                        {% for finish in missing_finishes %}
+                            <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm d-flex justify-content-between align-items-center px-2 quick-capture-btn" 
+                                    data-master="{{ master.id }}" data-finish="{{ finish|title }}">
+                                <span>{{ finish|title }}</span>
+                                <i class="bi bi-plus-circle-fill"></i>
+                            </button>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         {% endfor %}
