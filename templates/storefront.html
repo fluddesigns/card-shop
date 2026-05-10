@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ user.username }}'s Storefront{% endblock %}
+
+{% block styles %}
+<style>
+    .store-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1.5rem;
+        padding: 1rem 0;
+    }
+
+    @media (max-width: 576px) {
+        .store-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+    }
+
+    .tcg-card-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 12px;
+        padding: 12px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .tcg-card-wrapper:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    }
+
+    .tcg-card-img {
+        width: 100%;
+        border-radius: 4.75% / 3.5%;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        margin-bottom: 12px;
+    }
+
+    .card-meta {
+        width: 100%;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="p-4 mb-5 bg-dark text-white rounded-4 shadow-sm text-center">
+        <h1 class="fw-bold mb-2">🛍️ {{ user.username }}'s Card Shop</h1>
+        <p class="text-muted mb-0">{{ inventory|length }} Cards Available</p>
+    </div>
+
+    {% if not inventory %}
+        <div class="text-center py-5">
+            <h3 class="text-muted fw-bold">No cards currently listed for sale.</h3>
+            <p class="text-muted">Check back later!</p>
+        </div>
+    {% else %}
+        <div class="store-grid">
+            {% for item in inventory %}
+                <div class="tcg-card-wrapper shadow-sm">
+                    <img src="{{ item.master_card.image_url }}" alt="{{ item.master_card.name }}" class="tcg-card-img" loading="lazy">
+                    
+                    <div class="card-meta">
+                        <div class="fw-bold text-truncate" style="font-size: 1.1rem;">{{ item.master_card.name }}</div>
+                        <div class="text-muted small mb-2">{{ item.master_card.expansion_set.name }} #{{ item.master_card.card_number }}</div>
+                        
+                        <div class="d-flex flex-wrap justify-content-center gap-1 mb-3">
+                            <span class="badge bg-secondary">{{ item.variant }}</span>
+                            <span class="badge bg-dark border">{{ item.condition }}</span>
+                            
+                            {% if item.grading_company %}
+                                <span class="badge bg-danger">{{ item.grading_company }} {{ item.grade_value }}</span>
+                            {% endif %}
+                        </div>
+
+                        {% if settings and settings.show_prices %}
+                            <div class="fw-bold text-success fs-5">
+                                ${{ "%.2f"|format(item.acquired_price) }}
+                            </div>
+                        {% else %}
+                            <a href="#" class="btn btn-sm btn-outline-primary w-100 fw-bold">Make Offer</a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

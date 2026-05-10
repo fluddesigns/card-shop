@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import requests
 import urllib3
+import threading
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
@@ -55,7 +56,7 @@ class User(UserMixin, db.Model):
     inventory_items = db.relationship('Inventory', backref='owner', lazy=True, cascade="all, delete-orphan")
     
     sales = db.relationship('Sale', backref='seller', lazy=True, cascade="all, delete-orphan")
-    settings = db.relationship('Settings', backref='owner', uselist=False, cascade="all, delete-orphan")
+    settings = db.relationship('StorefrontSettings', backref='owner', uselist=False, cascade="all, delete-orphan")
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -67,7 +68,7 @@ class User(UserMixin, db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-class Settings(db.Model):
+class StorefrontSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     show_prices = db.Column(db.Boolean, default=False)
@@ -133,6 +134,8 @@ class Inventory(db.Model):
     grading_company = db.Column(db.String(20), nullable=True)
     grade_value = db.Column(db.Numeric(3, 1), nullable=True) # Numeric is perfect for precise grades like 9.5
     
+    variant = db.Column(db.String(50), nullable=False, default='Normal')
+
     status = db.Column(db.String(30), nullable=False, default='personal_collection')
     
     # Financial tracking for the future POS
@@ -153,11 +156,14 @@ with app.app_context():
 # --- Helper Functions ---
 
 def get_user_settings(user_id):
-    settings = Settings.query.filter_by(user_id=user_id).first()
+    # Updated to query the new StorefrontSettings model
+    settings = StorefrontSettings.query.filter_by(user_id=user_id).first()
+    
     if not settings:
-        settings = Settings(user_id=user_id, show_prices=False)
+        settings = StorefrontSettings(user_id=user_id, show_prices=True)
         db.session.add(settings)
         db.session.commit()
+        
     return settings
 
 # --- Helper Functions CONT.---
@@ -302,11 +308,16 @@ def link_orphans():
 
 @app.route('/u/<username>')
 def user_storefront(username):
-    user = User.query.filter_by(username=username.lower()).first_or_404()
-    settings = get_user_settings(user.id)
-    # Default Sort: Price High to Low
-    inventory = Card.query.filter_by(user_id=user.id).filter(Card.quantity > 0).order_by(Card.price.desc()).all()
-    return render_template('index.html', inventory=inventory, show_prices=settings.show_prices, owner=user)
+    user = User.query.filter_by(username=username).first_or_404()
+    settings = StorefrontSettings.query.filter_by(user_id=user.id).first()
+    
+    # Fetch only items marked for Sales, ordered by highest price first
+    inventory = Inventory.query.join(MasterCard).filter(
+        Inventory.user_id == user.id,
+        Inventory.status == 'Sales'
+    ).order_by(Inventory.acquired_price.desc()).all()
+    
+    return render_template('storefront.html', user=user, inventory=inventory, settings=settings)
 
 @app.route('/u/<username>/qr')
 def user_qr(username):
@@ -348,66 +359,71 @@ def search_reference():
     query = request.args.get('q', '').lower().strip()
     if len(query) < 2: return jsonify([])
     
-    # Split the search query into individual words
     terms = query.split()
-    
-    # Require EVERY word to appear in either the card name OR the set name
     filters = []
+    
     for term in terms:
         filters.append(
             db.or_(
-                CardReference.name.ilike(f'%{term}%'),
-                CardReference.set_name.ilike(f'%{term}%')
+                MasterCard.name.ilike(f'%{term}%'),
+                ExpansionSet.name.ilike(f'%{term}%')
             )
         )
     
-    # Query using db.and_ to enforce all filters, order by newest releases first
-    results = CardReference.query.filter(db.and_(*filters)).order_by(CardReference.release_date.desc()).limit(20).all()
+    # We join ExpansionSet so we can search/sort by set data!
+    results = MasterCard.query.join(ExpansionSet).filter(db.and_(*filters)).order_by(ExpansionSet.release_date.desc()).limit(20).all()
     
     data = []
     for card in results:
         data.append({
             'id': card.id,
             'name': card.name,
-            'set': card.set_name,
-            'number': card.number,
+            'set': card.expansion_set.name,
+            'number': card.card_number,
             'image': card.image_url,
-            'label': f"{card.name} ({card.set_name}) #{card.number}"
+            'label': f"{card.name} ({card.expansion_set.name}) #{card.card_number}"
         })
     return jsonify(data)
 
-@app.route('/admin/sync_db', methods=['POST'])
-@login_required
-def sync_db():
-    if not current_user.is_admin:
-        return redirect(url_for('admin'))
-    
-    try:
+def run_full_sync(app_context):
+    """Background worker to handle pagination without timing out the web browser."""
+    with app_context:
         api_url = "https://api.pokemontcg.io/v2/cards"
-        params = {'pageSize': 250} # Note: Without pagination, this only grabs the first 250 cards
-        headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
+        page = 1
+        has_more = True
         
-        r = requests.get(api_url, params=params, headers=headers, timeout=30, verify=False)
+        print("--- STARTING BACKGROUND API SYNC ---", flush=True)
         
-        if r.status_code == 200:
-            data = r.json()
-            sets_added = 0
-            cards_added = 0
+        while has_more:
+            params = {'pageSize': 250, 'page': page} 
+            headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
             
-            if 'data' in data:
-                for item in data['data']:
+            try:
+                r = requests.get(api_url, params=params, headers=headers, timeout=30, verify=False)
+                
+                if r.status_code != 200:
+                    print(f"API Error on page {page}: {r.status_code}. Stopping sync.", flush=True)
+                    break
+                    
+                data = r.json()
+                cards = data.get('data', [])
+                
+                # If the page is empty, we've reached the end of the database
+                if not cards:
+                    has_more = False
+                    break
+                    
+                for item in cards:
                     try:
                         # --- 1. HANDLE THE EXPANSION SET ---
                         api_set = item.get('set', {})
-                        set_api_id = api_set.get('id') # e.g., 'base1'
+                        set_api_id = api_set.get('id') 
                         
                         if not set_api_id: continue
                         
-                        # Check if this set already exists in our database
                         db_set = ExpansionSet.query.filter_by(set_code=set_api_id).first()
                         
                         if not db_set:
-                            # Convert 'YYYY/MM/DD' string into a Python Date object
                             rel_date_str = api_set.get('releaseDate')
                             parsed_date = None
                             if rel_date_str:
@@ -424,17 +440,12 @@ def sync_db():
                                 total_cards=api_set.get('printedTotal')
                             )
                             db.session.add(db_set)
-                            
-                            # CRITICAL: flush() pushes the set to the database to generate an ID, 
-                            # but doesn't permanently commit it yet. We need this ID for the card!
                             db.session.flush() 
-                            sets_added += 1
 
                         # --- 2. HANDLE THE MASTER CARD ---
                         c_name = item.get('name', 'Unknown')
                         c_number = item.get('number', '')
                         
-                        # Check if card exists in this specific set
                         db_card = MasterCard.query.filter_by(
                             set_id=db_set.id, 
                             card_number=c_number, 
@@ -443,32 +454,51 @@ def sync_db():
                         
                         if not db_card:
                             images = item.get('images', {})
-                            
                             db_card = MasterCard(
-                                set_id=db_set.id,          # Linking the card to the set!
+                                set_id=db_set.id,
                                 name=c_name,
                                 card_number=c_number,
                                 rarity=item.get('rarity'),
                                 card_type=item.get('supertype'),
-                                image_url=images.get('small') # We will proxy this locally later
+                                variant_type=get_clean_finishes(item.get('tcgplayer')),
+                                image_url=images.get('small') 
                             )
                             db.session.add(db_card)
-                            cards_added += 1
                             
                     except Exception as e:
-                        print(f"CRASH ON CARD {item.get('id')}: {str(e)}", flush=True)
+                        print(f"Crash on card {item.get('id')}: {str(e)}", flush=True)
                         continue
                 
+                # Commit at the end of every page. If it crashes on page 50, we keep the first 49!
                 db.session.commit()
-                flash(f"Sync Complete: Added {sets_added} new sets and {cards_added} new cards to the Master DB.")
-            else:
-                flash("Sync Failed: Invalid data format from API.")
-        else:
-            flash(f"Sync Failed: API Error {r.status_code}")
-            
-    except Exception as e:
-        flash(f"Sync Error: {str(e)}")
+                print(f"Successfully synced Page {page} ({len(cards)} cards).", flush=True)
+                
+                # If we get less than 250 cards, it means we hit the very last page
+                if len(cards) < 250:
+                    has_more = False
+                else:
+                    page += 1
+                    
+            except Exception as e:
+                print(f"Background Sync Crashed on page {page}: {str(e)}", flush=True)
+                db.session.rollback()
+                break
+                
+        print("--- BACKGROUND SYNC COMPLETE ---", flush=True)
+
+
+@app.route('/admin/sync_db', methods=['POST'])
+@login_required
+def sync_db():
+    if not current_user.is_admin:
+        return redirect(url_for('admin'))
         
+    # Grab the active database context and pass it to a new background thread
+    app_context = app.app_context()
+    thread = threading.Thread(target=run_full_sync, args=(app_context,))
+    thread.start()
+    
+    flash("🔄 Master Database Sync started in the background! It will take several minutes to pull all 15,000+ cards. Refresh the page periodically to see the cache count go up.")
     return redirect(url_for('admin'))
 
 @app.route('/api/pos_search')
@@ -830,14 +860,24 @@ def delete_user(user_id):
     flash(f"User {user_to_delete.username} deleted.")
     return redirect(url_for('super_admin'))
 
-@app.route('/update_settings', methods=['POST'])
+@app.route('/admin/update_settings', methods=['POST'])
 @login_required
 def update_settings():
-    settings = get_user_settings(current_user.id)
-    show_prices = request.form.get('show_prices') == 'on'
-    settings.show_prices = show_prices
+    if not current_user.is_admin:
+        return redirect(url_for('admin'))
+
+    settings = StorefrontSettings.query.filter_by(user_id=current_user.id).first()
+    
+    # If the user doesn't have a settings row yet, create one
+    if not settings:
+        settings = StorefrontSettings(user_id=current_user.id)
+        db.session.add(settings)
+
+    # HTML Checkboxes only send data in the form if they are checked
+    settings.show_prices = 'show_prices' in request.form
+
     db.session.commit()
-    flash(f"Public pricing visibility set to: {show_prices}")
+    flash("✅ Storefront settings updated.")
     return redirect(url_for('admin'))
 
 @app.route('/add_card', methods=['POST'])
@@ -896,6 +936,7 @@ def add_card():
                 condition=request.form.get('condition', 'NM'),
                 grading_company=grading_company,
                 grade_value=grade_val,
+                variant=request.form.get('finish', 'Normal'),
                 status=request.form.get('status', 'personal_collection'),
                 acquired_price=price_val,
                 notes=f"Cert: {request.form.get('cert_number')}" if is_graded and request.form.get('cert_number') else None
@@ -1069,24 +1110,26 @@ def bulk_actions():
     count = 0
     try:
         for c_id in card_ids:
-            card = Card.query.get(int(c_id))
-            if card and card.user_id == current_user.id:
+            # Updated to query Inventory
+            item = Inventory.query.get(int(c_id))
+            if item and item.user_id == current_user.id:
                 if action == 'delete':
-                    db.session.delete(card)
+                    db.session.delete(item)
                     count += 1
                 elif action == 'sell':
-                    base_price = card.price * card.quantity
-                    final_price = base_price * multiplier
+                    # New schema handles prices via acquired_price and quantity is always 1 per row
+                    base_price = item.acquired_price or 0.0
+                    final_price = float(base_price) * multiplier
                     
                     sale = Sale(
                         user_id=current_user.id,
-                        card_name=card.card_name,
-                        set_name=card.set_name,
+                        card_name=item.master_card.name,
+                        set_name=item.master_card.expansion_set.name,
                         sale_price=final_price,
-                        quantity=card.quantity
+                        quantity=1 
                     )
                     db.session.add(sale)
-                    db.session.delete(card)
+                    db.session.delete(item) # Remove the physical item from inventory
                     count += 1
 
         db.session.commit()
@@ -1094,7 +1137,7 @@ def bulk_actions():
         if action == 'delete':
             flash(f"Deleted {count} cards.")
         elif action == 'sell':
-            msg = f"Sold {count} lots."
+            msg = f"Sold {count} cards."
             if discount_pct > 0: msg += f" Applied {discount_pct}% discount."
             flash(msg)
             
@@ -1107,65 +1150,50 @@ def bulk_actions():
 @app.route('/update_card/<int:id>', methods=['POST'])
 @login_required
 def update_card(id):
-    card = Card.query.get_or_404(id)
-    if card.user_id != current_user.id:
+    item = Inventory.query.get_or_404(id)
+    
+    if item.user_id != current_user.id:
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 403
         flash("Unauthorized")
         return redirect(url_for('admin'))
 
-    action = request.form.get('action')
+    # Support both standard form data and JSON payloads
+    action = request.form.get('action') or request.json.get('action')
     
-    if action == 'sold_custom':
-        try:
-            qty_sold = int(request.form.get('sold_quantity', 1))
-            total_price_input = request.form.get('sale_total')
+    if action == 'delete':
+        db.session.delete(item)
+        db.session.commit()
+        
+        if request.is_json:
+            return jsonify({'success': True, 'action': 'delete', 'id': id})
             
-            discount_raw = request.form.get('discount', '0')
-            discount_pct = float(discount_raw) if discount_raw.strip() != '' else 0.0
-            multiplier = (100 - discount_pct) / 100
-            
-            if total_price_input and total_price_input.strip() != '':
-                final_sale_price = float(total_price_input)
-            else:
-                final_sale_price = (card.price * qty_sold) * multiplier
-
-            if card.quantity >= qty_sold:
-                card.quantity -= qty_sold
-                if card.quantity == 0:
-                    db.session.delete(card)
-
-                sale = Sale(
-                    user_id=current_user.id,
-                    card_name=card.card_name,
-                    set_name=card.set_name,
-                    sale_price=final_sale_price,
-                    quantity=qty_sold
-                )
-                db.session.add(sale)
-                
-                msg = f"Sold {qty_sold}x {card.card_name} for ${final_sale_price:.2f}"
-                if discount_pct > 0: msg += f" ({discount_pct}% off)"
-                flash(msg)
-            else:
-                flash("Not enough quantity.")
-        except ValueError:
-            flash("Invalid quantity or price.")
-
-    elif action == 'delete':
-        db.session.delete(card)
+        flash(f"Deleted {item.master_card.name} from inventory.")
         
     elif action == 'update_details':
         try:
-            card.price = float(request.form.get('price'))
-            new_qty = int(request.form.get('quantity'))
-            if new_qty <= 0:
-                db.session.delete(card)
-            else:
-                card.quantity = new_qty
-            card.condition = request.form.get('condition')
-            card.location = request.form.get('location')
-        except: flash("Invalid input")
+            new_price = request.form.get('price') or request.json.get('price')
+            new_cond = request.form.get('condition') or request.json.get('condition')
+            
+            item.acquired_price = float(new_price)
+            item.condition = new_cond
+            db.session.commit()
+            
+            if request.is_json:
+                return jsonify({
+                    'success': True, 
+                    'action': 'update', 
+                    'id': id,
+                    'price': float(item.acquired_price), 
+                    'condition': item.condition
+                })
+                
+            flash("Card details updated.")
+        except Exception as e: 
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Invalid input for price.'}), 400
+            flash("Invalid input for price.")
         
-    db.session.commit()
     return redirect(url_for('admin'))
 
 # --- POKEDEX & HUNT MODE ---
@@ -1178,25 +1206,38 @@ def pokedex_hub():
     
     for t in trackers:
         species = t.species_name
-        # Find all cards that belong to this species
-        master_cards = CardReference.query.filter(CardReference.name.ilike(f"%{species}%")).all()
+        # Find all Master Cards that belong to this species
+        master_cards = MasterCard.query.filter(MasterCard.name.ilike(f"%{species}%")).all()
         
         total_slots = 0
         owned_count = 0
         
-        for ref in master_cards:
-            finishes = ref.available_finishes.split(',') if ref.available_finishes else ["Normal"]
-            for f in finishes:
-                total_slots += 1  # Every variant (1st Ed, Holo, etc.) is its own "slot"
+        if master_cards:
+            master_ids = [m.id for m in master_cards]
+
+            # Fetch all owned inventory for this species at once for speed
+            owned_inventory = Inventory.query.filter(
+                Inventory.user_id == current_user.id,
+                Inventory.master_card_id.in_(master_ids)
+            ).all()
+
+            # Create a fast lookup dictionary: { master_card_id: set_of_lowercase_finishes }
+            owned_dict = {}
+            for item in owned_inventory:
+                if item.master_card_id not in owned_dict:
+                    owned_dict[item.master_card_id] = set()
+                owned_dict[item.master_card_id].add(item.variant.lower().strip())
+        
+            for ref in master_cards:
+                # Variant types are stored as a comma-separated string (e.g., "Normal,Reverse Holofoil")
+                finishes = [f.strip() for f in ref.variant_type.split(',')] if ref.variant_type else ["Normal"]
                 
-                # Check if user owns THIS specific variant
-                is_owned = Card.query.filter_by(
-                    user_id=current_user.id,
-                    reference_id=ref.id,
-                    finish=f
-                ).first()
-                if is_owned:
-                    owned_count += 1
+                for f in finishes:
+                    total_slots += 1 
+                    
+                    # Check if the user owns THIS specific variant
+                    if ref.id in owned_dict and f.lower() in owned_dict[ref.id]:
+                        owned_count += 1
         
         pct = int((owned_count / total_slots) * 100) if total_slots > 0 else 0
         stats.append({'name': species, 'total': total_slots, 'owned': owned_count, 'percent': pct})
@@ -1206,29 +1247,35 @@ def pokedex_hub():
 @app.route('/pokedex/<species>')
 @login_required
 def pokedex_binder(species):
-    # Group by artwork for the UI
-    master_cards = CardReference.query.filter(
-        CardReference.name.ilike(f"%{species}%")
-    ).order_by(CardReference.release_date.desc()).all()
+    # 1. Fetch all Master Cards for the requested species, ordered by newest set
+    master_cards = MasterCard.query.join(ExpansionSet).filter(
+        MasterCard.name.ilike(f"%{species}%")
+    ).order_by(ExpansionSet.release_date.desc()).all()
 
     if not master_cards:
+        flash(f"No cards found for {species} in the Master Database yet.")
         return redirect(url_for('pokedex_hub'))
 
-    ref_ids = [c.id for c in master_cards]
-    owned_cards = Card.query.filter(
-        Card.user_id == current_user.id,
-        Card.reference_id.in_(ref_ids)
+    # 2. Find which of these specific Master Cards the user actually owns
+    master_ids = [c.id for c in master_cards]
+    owned_inventory = Inventory.query.filter(
+        Inventory.user_id == current_user.id,
+        Inventory.master_card_id.in_(master_ids)
     ).all()
 
-    # Map owned cards to their artwork IDs
+    # 3. Group the user's owned inventory by MasterCard ID for the UI to easily read
+    # We store the 'variant' (Normal, Reverse Holo, etc.) so the UI knows what finishes you have
     owned_dict = {}
-    for oc in owned_cards:
-        if oc.reference_id not in owned_dict:
-            owned_dict[oc.reference_id] = []
-        owned_dict[oc.reference_id].append(oc)
+    for item in owned_inventory:
+        if item.master_card_id not in owned_dict:
+            owned_dict[item.master_card_id] = []
+        
+        finish_clean = item.variant.lower().strip()
+        if finish_clean not in owned_dict[item.master_card_id]:
+            owned_dict[item.master_card_id].append(finish_clean)
 
     return render_template('pokedex_binder.html', 
-                           species=species.capitalize(), 
+                           species=species.title(), 
                            master_cards=master_cards, 
                            owned_dict=owned_dict)
 
@@ -1256,58 +1303,162 @@ def toggle_favorite():
 @app.route('/api/quick_capture', methods=['POST'])
 @login_required
 def quick_capture():
-    ref_id = request.form.get('reference_id')
-    finish = request.form.get('finish')
+    master_id = request.form.get('master_id')
+    finish = request.form.get('finish', 'Normal')
     
-    ref = CardReference.query.get_or_404(ref_id)
+    master = MasterCard.query.get_or_404(master_id)
     
-    is_1st = '1st Edition' in finish or '1st' in finish
-    
-    new_card = Card(
+    # Generate the physical inventory row
+    new_item = Inventory(
+        master_card_id=master.id,
         user_id=current_user.id,
-        status='Personal', 
-        reference_id=ref.id,
-        game='Pokemon TCG',
-        card_name=ref.name,
-        set_name=ref.set_name,
-        card_number=ref.number,
-        condition='NM',
-        finish=finish,
-        price=0.0,
-        quantity=1,
-        image_url=ref.image_url,
-        is_first_edition=is_1st
+        condition='NM',              # Default for a quick capture
+        variant=finish,
+        status='personal_collection',
+        acquired_price=0.0
     )
-    db.session.add(new_card)
+    db.session.add(new_item)
     db.session.commit()
     
-    # NEW: If the request is from our background Javascript, send a silent JSON response
+    # If called via AJAX (which we will setup later for a smoother UI)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'success': True, 'message': f'Captured {finish}'})
     
-    # Fallback for standard page reloads
-    flash(f"🎉 Captured {ref.name} ({finish}) into your Binder!")
+    flash(f"🎉 Captured {master.name} ({finish}) into your Binder!")
     return redirect(request.referrer or url_for('pokedex_hub'))
 
 @app.route('/api/force_variant', methods=['POST'])
 @login_required
 def force_variant():
-    ref_id = request.form.get('reference_id')
+    # 🔒 SECURITY CHECK: Kick out non-admins immediately
+    if not current_user.is_admin:
+        flash("Unauthorized access.")
+        return redirect(url_for('admin'))
+
+    api_id = request.form.get('api_id')
     new_finish = request.form.get('new_finish')
     
-    card_ref = CardReference.query.get(ref_id)
-    if card_ref and new_finish:
-        current_finishes = card_ref.available_finishes.split(',') if card_ref.available_finishes else []
+    if not api_id or not new_finish:
+        flash("Missing ID or Finish.")
+        return redirect(url_for('admin'))
+
+    # Parse the API ID (e.g., "neo4-6" -> set_code="neo4", card_number="6")
+    parts = api_id.strip().rsplit('-', 1)
+    if len(parts) != 2:
+        flash("Invalid API ID format. Use format like 'neo4-6'")
+        return redirect(url_for('admin'))
+
+    set_code, card_number = parts[0], parts[1]
+
+    # Look up the card using our relational join
+    master_card = MasterCard.query.join(ExpansionSet).filter(
+        ExpansionSet.set_code == set_code,
+        MasterCard.card_number == card_number
+    ).first()
+
+    if master_card and new_finish:
+        current_finishes = master_card.variant_type.split(',') if master_card.variant_type else []
+        current_finishes = [f.strip() for f in current_finishes]
         
         if new_finish not in current_finishes:
             current_finishes.append(new_finish)
-            card_ref.available_finishes = ",".join(current_finishes)
+            master_card.variant_type = ",".join(current_finishes)
             db.session.commit()
-            flash(f"✅ Successfully forced '{new_finish}' variant onto {card_ref.name}!")
+            flash(f"✅ Successfully forced '{new_finish}' variant onto {master_card.name}!")
         else:
-            flash(f"⚠️ {card_ref.name} already has {new_finish} tracked.")
+            flash(f"⚠️ {master_card.name} already has {new_finish} tracked.")
+    else:
+        flash(f"❌ Could not find card '{api_id}' in the database. Try a Manual API Inject first.")
             
-    return redirect(request.referrer or url_for('pokedex_hub'))
+    return redirect(url_for('admin'))
+
+@app.route('/api/force_api_fetch', methods=['POST'])
+@login_required
+def force_api_fetch():
+    # 🔒 SECURITY CHECK: Kick out non-admins immediately
+    if not current_user.is_admin:
+        flash("Unauthorized access.")
+        return redirect(url_for('admin'))
+
+    api_id = request.form.get('api_id')
+    if not api_id:
+        return redirect(url_for('admin'))
+    
+    api_id = api_id.strip()
+
+    url = f"https://api.pokemontcg.io/v2/cards/{api_id}"
+    headers = {'User-Agent': 'FludInventory/1.0', 'Accept': 'application/json'}
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        
+        if response.status_code == 200:
+            api_data = response.json().get('data', {})
+            
+            # --- 1. HANDLE THE EXPANSION SET ---
+            api_set = api_data.get('set', {})
+            set_api_id = api_set.get('id')
+            
+            if not set_api_id:
+                flash(f"❌ API data missing set info for ID: {api_id}")
+                return redirect(url_for('admin'))
+                
+            db_set = ExpansionSet.query.filter_by(set_code=set_api_id).first()
+            
+            if not db_set:
+                rel_date_str = api_set.get('releaseDate')
+                parsed_date = None
+                if rel_date_str:
+                    try:
+                        parsed_date = datetime.strptime(rel_date_str, '%Y/%m/%d').date()
+                    except ValueError:
+                        parsed_date = None
+                
+                db_set = ExpansionSet(
+                    name=api_set.get('name', 'Unknown'),
+                    series=api_set.get('series', 'Unknown'),
+                    set_code=set_api_id, 
+                    release_date=parsed_date,
+                    total_cards=api_set.get('printedTotal')
+                )
+                db.session.add(db_set)
+                db.session.flush() # Generate the Set ID immediately
+
+            # --- 2. HANDLE THE MASTER CARD ---
+            c_name = api_data.get('name', 'Unknown')
+            c_number = api_data.get('number', '')
+            
+            db_card = MasterCard.query.filter_by(
+                set_id=db_set.id, 
+                card_number=c_number, 
+                name=c_name
+            ).first()
+            
+            if db_card:
+                flash(f"ℹ️ {c_name} ({api_id}) already exists in your Master Database.")
+            else:
+                images = api_data.get('images', {})
+                db_card = MasterCard(
+                    set_id=db_set.id,
+                    name=c_name,
+                    card_number=c_number,
+                    rarity=api_data.get('rarity'),
+                    card_type=api_data.get('supertype'),
+                    variant_type=get_clean_finishes(api_data.get('tcgplayer')),
+                    image_url=images.get('small') 
+                )
+                db.session.add(db_card)
+                db.session.commit()
+                flash(f"✅ Successfully injected {c_name} ({api_id}) into your Pokedex!")
+                
+        else:
+            flash(f"❌ API could not find a card with ID: {api_id}")
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f"❌ Error fetching card: {str(e)}")
+        
+    return redirect(url_for('admin'))
 
 @app.route('/hunt/<species>')
 @login_required
@@ -1345,48 +1496,6 @@ def hunt_mode(species):
             })
 
     return render_template('hunt_mode.html', species=species.capitalize(), targets=hunt_targets)
-
-@app.route('/api/force_api_fetch', methods=['POST'])
-@login_required
-def force_api_fetch():
-    api_id = request.form.get('api_id')
-    if not api_id:
-        return redirect(url_for('admin'))
-    
-    api_id = api_id.strip()
-
-    url = f"https://api.pokemontcg.io/v2/cards/{api_id}"
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        api_data = response.json().get('data', {})
-        
-        existing = CardReference.query.get(api_id)
-        if existing:
-            flash(f"ℹ️ {api_id} already exists in your local dictionary.")
-            return redirect(url_for('admin'))
-
-        images = api_data.get('images', {})
-        card_set = api_data.get('set', {})
-        
-        new_ref = CardReference(
-            id=api_data.get('id'),
-            name=api_data.get('name'),
-            set_name=card_set.get('name'),
-            set_id=card_set.get('id'),
-            number=api_data.get('number'),
-            image_url=images.get('large') or images.get('small'),
-            release_date=card_set.get('releaseDate'),
-            available_finishes=get_clean_finishes(api_data.get('tcgplayer')),
-            is_favorite=True 
-        )
-        db.session.add(new_ref)
-        db.session.commit()
-        flash(f"✅ Successfully injected {api_data.get('name')} ({api_id}) into your Pokedex!")
-    else:
-        flash(f"❌ API could not find a card with ID: {api_id}")
-        
-    return redirect(url_for('admin'))
 
 # Add this near your other routes in app.py
 

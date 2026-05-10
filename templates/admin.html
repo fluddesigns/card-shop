@@ -1,243 +1,253 @@
 ﻿{% extends "base.html" %}
-{% block title %}Admin Dashboard{% endblock %}
-
-{% block styles %}
-<style>
-    /* 📱 Mobile Responsive Table-to-Card Layout */
-    @media (max-width: 767.98px) {
-        #inventoryTable thead { display: none; }
-        
-        #inventoryTable tbody tr {
-            display: grid;
-            grid-template-columns: 35px 1fr auto;
-            grid-template-areas: 
-                "check name price"
-                "check qty expand"
-                "details details details"
-                "actions actions actions";
-            border-bottom: 1px solid var(--bs-border-color);
-            padding: 14px 8px;
-            align-items: start;
-            background: var(--bs-body-bg);
-            transition: background-color 0.2s, border-left 0.2s;
-            border-left: 4px solid transparent;
-            cursor: pointer; /* Suggests interactivity */
-        }
-        
-        #inventoryTable tbody tr.is-expanded {
-            background: var(--bs-tertiary-bg);
-            border-left: 4px solid var(--bs-primary);
-        }
-
-        #inventoryTable tbody td { border: none; padding: 4px 0; }
-        
-        #inventoryTable td:first-child { grid-area: check; align-self: center; }
-        
-        .col-name { grid-area: name; font-size: 1.1rem; padding-right: 10px !important; line-height: 1.2; }
-        .col-price { grid-area: price; text-align: right; font-size: 1.1rem; }
-        .col-qty { grid-area: qty; font-size: 0.9rem; color: var(--bs-secondary-color); margin-top: 4px; }
-        .col-qty::before { content: 'Qty: '; }
-        
-        /* Expand toggle chevron */
-        .col-expand { 
-            grid-area: expand; 
-            text-align: right; 
-            color: var(--bs-secondary-color); 
-            font-size: 0.9rem;
-            align-self: center;
-        }
-        .col-expand .expand-icon { transition: transform 0.3s ease; display: inline-block; }
-        tr.is-expanded .col-expand .expand-icon { transform: rotate(180deg); color: var(--bs-primary); }
-
-        /* Detail fields - Hidden in overview */
-        .col-number, .col-set, .col-game, .col-status, .col-finish, .col-cond, .col-slab, .col-loc, .col-updated {
-            display: none !important; /* Overrides inline JS toggles */
-            font-size: 0.85rem;
-            padding-left: 35px !important;
-            margin-bottom: 4px;
-        }
-        
-        /* Detail fields - Visible in drill-down */
-        tr.is-expanded .col-number, tr.is-expanded .col-set, tr.is-expanded .col-game, 
-        tr.is-expanded .col-status, tr.is-expanded .col-finish, tr.is-expanded .col-cond, 
-        tr.is-expanded .col-slab, tr.is-expanded .col-loc, tr.is-expanded .col-updated {
-            display: block !important;
-            grid-column: 1 / -1;
-        }
-
-        /* Detail Labels */
-        tr.is-expanded .col-number::before { content: 'Card #: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-        tr.is-expanded .col-set::before { content: 'Set: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-        tr.is-expanded .col-game::before { content: 'Game: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-        tr.is-expanded .col-status::before { content: 'Status: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-        tr.is-expanded .col-finish::before { content: 'Finish: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-        tr.is-expanded .col-cond::before { content: 'Cond: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-        tr.is-expanded .col-slab::before { content: 'Slab Info: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-        tr.is-expanded .col-loc::before { content: 'Location: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-        tr.is-expanded .col-updated::before { content: 'Updated: '; font-weight: 600; display: inline-block; width: 85px; color: var(--bs-secondary-color); }
-
-        .col-actions {
-            grid-area: actions;
-            text-align: right;
-            border-top: 1px dashed var(--bs-border-color);
-            margin-top: 12px;
-            padding-top: 12px !important;
-            display: none !important;
-        }
-        tr.is-expanded .col-actions { display: block !important; }
-    }
-</style>
-{% endblock %}
+{% block title %}Admin Dashboard | Flud Media TCG{% endblock %}
 
 {% block content %}
-<div class="container py-4">
+<div class="container py-4" x-data="inventoryApp()">
+    
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
-            <small class="text-muted"><span id="visibleCount">{{ inventory|length }}</span> Cards Visible</small>
-            <h1 class="fw-bold mb-0">Inventory</h1>
+            <small class="text-muted"><span x-text="visibleCount"></span> Cards Visible</small>
+            <h1 class="fw-bold mb-0">Inventory Dashboard</h1>
         </div>
         
         <div class="d-flex flex-wrap flex-md-nowrap gap-2">
-            <button class="btn btn-outline-dark flex-grow-1 flex-md-grow-0" data-bs-toggle="offcanvas" data-bs-target="#filterOffcanvas">
-                🔍 View & Filters
-            </button>
-            <button class="btn btn-outline-secondary flex-grow-1 flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#toolsModal">
-                ⚙️ Tools
-            </button>
-            <button class="btn btn-danger fw-bold shadow-sm flex-grow-1 flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#addCardsModal">
-                ➕ Add Cards
-            </button>
-        </div>
-    </div>
-
-    <div id="priceProgressContainer" class="progress mb-3 d-none shadow-sm" style="height: 25px;">
-        <div id="priceProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-body" role="progressbar" style="width: 0%">
-            Starting Update...
-        </div>
-    </div>
-
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-info alert-dismissible fade show shadow-sm" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            <div class="input-group flex-grow-1">
+                <span class="input-group-text bg-body border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" class="form-control border-start-0 ps-0" placeholder="Search cards..." x-model="searchQuery">
+            </div>
+            
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                    <i class="bi bi-funnel me-1"></i> Filter
+                    <span class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle" x-show="filterStatus !== '' || filterCondition !== ''" x-cloak></span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-3 shadow-sm" style="min-width: 200px;">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-1">Status</label>
+                        <select class="form-select form-select-sm" x-model="filterStatus">
+                            <option value="">All Statuses</option>
+                            <option value="personal_collection">Binder</option>
+                            <option value="Sales">Sales</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-1">Condition</label>
+                        <select class="form-select form-select-sm" x-model="filterCondition">
+                            <option value="">All Conditions</option>
+                            <option value="NM">Near Mint (NM)</option>
+                            <option value="LP">Lightly Played (LP)</option>
+                            <option value="MP">Moderately Played (MP)</option>
+                            <option value="HP">Heavily Played (HP)</option>
+                            <option value="DMG">Damaged (DMG)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-sm btn-light w-100 border" @click="filterStatus = ''; filterCondition = ''">Clear Filters</button>
                 </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+            </div>
+
+            <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#toolsModal">
+                <i class="bi bi-gear-fill"></i><span class="d-none d-md-inline ms-1">Tools</span>
+            </button>
+            <button class="btn btn-danger fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addCardsModal">
+                <i class="bi bi-plus-lg"></i><span class="d-none d-md-inline ms-1">Add Cards</span>
+            </button>
+        </div>
+    </div>
 
     <div class="card shadow-sm border-0 mb-5">
         <div class="card-body p-0">
             <form method="POST" action="{{ url_for('bulk_actions') }}" id="bulkForm">
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover mb-0 align-middle" id="inventoryTable">
+                
+                <div class="table-responsive d-none d-md-block">
+                    <table class="table table-hover align-middle mb-0">
                         <thead>
                             <tr>
-                                <th style="width:40px;"><input type="checkbox" class="form-check-input" id="selectAll"></th>
-                                <th class="col-name">Card Name</th>
-                                <th class="col-number">Card #</th>
-                                <th class="col-set">Set</th>
-                                <th class="col-game">Game</th>
-                                <th class="col-status">Status</th>
-                                <th class="col-finish">Finish</th>
-                                <th class="col-cond">Cond</th>
-                                <th class="col-slab">Graded Info</th>
-                                <th class="col-loc">Location</th>
-                                <th class="col-price">Price</th>
-                                <th class="col-updated">Updated</th>
-                                <th class="col-qty">Qty</th>
-                                <th class="col-actions">Edit</th>
-                                <th class="col-expand d-md-none"></th> </tr>
+                                <th style="width:40px;"><input type="checkbox" class="form-check-input" @change="toggleAll($event)"></th>
+                                <th>Card Name</th>
+                                <th>Set</th>
+                                <th>Status</th>
+                                <th>Cond</th>
+                                <th class="text-end">Price</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
                         </thead>
-                        <tbody id="inventoryBody">
+                        <tbody>
                             {% for card in inventory %}
-                            <tr class="inventory-row" data-id="{{ card.id }}" data-name="{{ card.master_card.name|lower }}" data-set="{{ card.master_card.expansion_set.name }}" data-game="{{ card.game }}" data-price="{{ card.acquired_price }}">
-                                <td class="text-center"><input type="checkbox" class="form-check-input card-checkbox" name="card_ids" value="{{ card.id }}"></td>
-                                <td class="col-name">
+                            <tr x-show="isVisible('{{ card.master_card.name|lower|replace("'", "\\'") }}', '{{ card.master_card.expansion_set.name|lower|replace("'", "\\'") }}', '{{ card.status }}', '{{ card.condition }}')">
+                                <td><input type="checkbox" class="form-check-input" name="card_ids" value="{{ card.id }}" x-model="selectedCards"></td>
+                                <td>
                                     <span class="fw-bold">{{ card.master_card.name }}</span>
-                                    {% if card.is_first_edition %}
-                                        <span class="badge bg-warning text-body border border-dark ms-1" style="font-size:0.6em;">1st Ed</span>
+                                    {% if card.master_card.variant_type == '1st Edition' %}
+                                        <span class="badge bg-warning text-dark ms-1">1st Ed</span>
                                     {% endif %}
                                 </td>
-                                <td class="col-number"><small class="text-muted">{{ card.card_number or '-' }}</small></td>
-                                <td class="col-set"><small class="text-muted">{{ card.master_card.expansion_set.name }}</small></td>
-                                <td class="col-game"><small class="text-muted">{{ card.game }}</small></td>
-                                <td class="col-status"><span class="badge {% if card.status == 'Sales' %}bg-success{% else %}bg-secondary{% endif %}">{{ card.status }}</span></td>
-                                <td class="col-finish">{{ card.finish or 'Normal' }}</td>
-                                <td class="col-cond">{{ card.condition }}</td>
-                                <td class="col-slab">
-                                    {% if card.grading_company %}
-                                        <span class="badge bg-danger rounded-pill" style="font-size: 0.7em;">{{ card.grading_company }} {{ card.grade }}</span>
-                                        <div class="text-muted" style="font-size:0.65em;">{{ card.cert_number }}</div>
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                                <td class="col-loc">{{ card.location or '-' }}</td>
-                                <td class="col-price price-cell text-success fw-bold">${{ "%.2f"|format(card.acquired_price) }}</td>
-                                <td class="col-updated date-cell text-muted small">
-                                    {{ card.last_updated.strftime('%m-%d') if card.last_updated else '-' }}
-                                </td>
-                                <td class="col-qty">{{ card.quantity }}</td>
-                                <td class="col-actions">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-bs-toggle="modal" data-bs-target="#editModal{{ card.id }}">
-                                        ✏️<span class="d-md-none ms-2">Edit Details</span>
+                                <td><small class="text-muted">{{ card.master_card.expansion_set.name }}</small></td>
+                                <td><span class="badge {% if card.status == 'Sales' %}bg-success{% else %}bg-secondary{% endif %}">{{ card.status }}</span></td>
+                                <td>{{ card.condition }}</td>
+                                <td class="text-success fw-bold text-end">${{ "%.2f"|format(card.acquired_price) }}</td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" 
+                                            @click="openEditModal({ id: '{{ card.id }}', name: '{{ card.master_card.name|replace("'", "\\'") }}', condition: '{{ card.condition }}', price: '{{ card.acquired_price }}' })">
+                                        <i class="bi bi-pencil"></i> Edit
                                     </button>
                                 </td>
-                                <td class="col-expand d-md-none"><span class="expand-icon">▼</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
+                <div class="d-md-none border-top">
+                    {% for card in inventory %}
+                    <div class="mobile-card-row p-3 border-bottom bg-body" 
+                         x-data="{ expanded: false }" 
+                         x-show="isVisible('{{ card.master_card.name|lower|replace("'", "\\'") }}', '{{ card.master_card.expansion_set.name|lower|replace("'", "\\'") }}', '{{ card.status }}', '{{ card.condition }}')"
+                         :class="expanded ? 'expanded' : ''">
+                        
+                        <div class="d-flex justify-content-between align-items-start" @click="expanded = !expanded">
+                            <div class="d-flex gap-3 align-items-start">
+                                <input type="checkbox" class="form-check-input mt-1" name="card_ids" value="{{ card.id }}" x-model="selectedCards" @click.stop>
+                                <div>
+                                    <div class="fw-bold fs-5 lh-1">{{ card.master_card.name }}</div>
+                                    <div class="text-muted small mt-1">{{ card.master_card.expansion_set.name }} • #{{ card.master_card.card_number or '-' }}</div>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="text-success fw-bold fs-5">${{ "%.2f"|format(card.acquired_price) }}</div>
+                                <i class="bi text-muted mt-1" :class="expanded ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 pt-3 border-top" x-show="expanded" x-collapse x-cloak>
+                            <div class="row g-2 mb-3 small">
+                                <div class="col-6"><span class="text-muted">Status:</span> <span class="fw-semibold">{{ card.status }}</span></div>
+                                <div class="col-6"><span class="text-muted">Condition:</span> <span class="fw-semibold">{{ card.condition }}</span></div>
+                                <div class="col-6"><span class="text-muted">Finish:</span> <span class="fw-semibold">{{ card.variant }}</span></div>
+                                <div class="col-6"><span class="text-muted">Graded:</span> <span class="fw-semibold">{% if card.grading_company %}{{ card.grading_company }} {{ card.grade_value }}{% else %}Raw{% endif %}</span></div>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary w-100" 
+                                    @click="openEditModal({ id: '{{ card.id }}', name: '{{ card.master_card.name|replace("'", "\\'") }}', condition: '{{ card.condition }}', price: '{{ card.acquired_price }}' })">
+                                <i class="bi bi-pencil me-1"></i> Edit Details
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
             </form>
         </div>
     </div>
-    
-    <div id="bulkActionBar" class="fixed-bottom bg-dark text-white p-3 shadow-lg d-none" style="z-index: 1040;">
-        <div class="container-fluid d-flex flex-column flex-md-row justify-content-between px-lg-5 gap-3">
-            <div class="d-flex justify-content-between align-items-center w-100 w-md-auto">
-                <div>
-                    <span class="badge bg-primary me-2 fs-6"><span id="selectedCount">0</span> Selected</span> 
-                </div>
-                <button class="btn btn-sm btn-outline-light" onclick="clearSelection()">Cancel</button>
-            </div>
-            <div class="d-flex align-items-center justify-content-end">
-                <input type="number" form="bulkForm" name="discount" class="form-control form-control-sm me-2" placeholder="Disc %" style="width:80px;">
-                <button type="submit" form="bulkForm" name="action" value="sell" class="btn btn-success me-2">Sell</button>
-                <button type="submit" form="bulkForm" name="action" value="delete" class="btn btn-danger">Delete</button>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="offcanvas offcanvas-end shadow" tabindex="-1" id="filterOffcanvas">
-    <div class="offcanvas-header bg-body-secondary border-bottom">
-        <h5 class="offcanvas-title fw-bold">🔍 View & Filters</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    <div class="fixed-bottom bg-dark text-white p-3 shadow-lg transition-all" 
+         style="z-index: 1040;" 
+         x-show="selectedCards.length > 0" 
+         x-transition.duration.300ms x-cloak>
+        <div class="container-fluid d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+            <div>
+                <span class="badge bg-primary me-2 fs-6"><span x-text="selectedCards.length"></span> Selected</span> 
+                <button class="btn btn-sm btn-link text-light text-decoration-none" @click="selectedCards = []">Clear</button>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <input type="number" form="bulkForm" name="discount" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Disc %" style="width:80px;">
+                <button type="submit" form="bulkForm" name="action" value="sell" class="btn btn-success"><i class="bi bi-cart-check me-1"></i> Sell</button>
+                <button type="submit" form="bulkForm" name="action" value="delete" class="btn btn-danger"><i class="bi bi-trash me-1"></i> Delete</button>
+            </div>
+        </div>
     </div>
-    <div class="offcanvas-body">
-        <div class="mb-4">
-            <label class="form-label text-muted small fw-bold text-uppercase">Search Name/Set</label>
-            <input type="text" id="adminSearch" class="form-control form-control-lg" placeholder="e.g. Charizard...">
+
+    <div class="modal fade" id="globalEditModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">Edit: <span x-text="activeEditCard.name"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form :action="'/admin/update_card/' + activeEditCard.id" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold text-uppercase">Condition</label>
+                            <select name="condition" class="form-select" x-model="activeEditCard.condition">
+                                <option value="NM">Near Mint (NM)</option>
+                                <option value="LP">Lightly Played (LP)</option>
+                                <option value="MP">Moderately Played (MP)</option>
+                                <option value="HP">Heavily Played (HP)</option>
+                                <option value="DMG">Damaged (DMG)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="form-label text-muted small fw-bold text-uppercase">Price ($)</label>
+                                <input type="number" step="0.01" name="price" class="form-control text-success fw-bold" x-model="activeEditCard.price">
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="button" @click="saveCard('delete')" class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            <button type="button" @click="saveCard('update_details')" class="btn btn-primary px-4 fw-bold shadow-sm">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
-        
-        <div class="mb-3">
-            <label class="form-label text-muted small fw-bold text-uppercase">Filter by Game</label>
-            <select id="filterGame" class="form-select"><option value="">All Games</option></select>
-        </div>
-        
-        <div class="mb-4">
-            <label class="form-label text-muted small fw-bold text-uppercase">Filter by Set</label>
-            <select id="filterSet" class="form-select"><option value="">All Sets</option></select>
-        </div>
-        
-        <hr>
-        
-        <div class="mb-3 d-none d-md-block">
-            <label class="form-label text-muted small fw-bold text-uppercase">⚙️ Toggle Columns (Desktop)</label>
-            <div id="columnToggleContainer" class="p-3 bg-body-secondary rounded border"></div>
+    </div>
+    
+</div> <div class="modal fade" id="toolsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-gear-fill me-2"></i>Admin Tools</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                
+                <form action="{{ url_for('update_settings') }}" method="POST" class="mb-4 bg-body-secondary p-3 rounded">
+                    <label class="form-label text-muted small fw-bold text-uppercase">Storefront Settings</label>
+                    <div class="form-check form-switch fs-5">
+                        <input class="form-check-input" type="checkbox" id="showPricesToggle" name="show_prices" {% if settings and settings.show_prices %}checked{% endif %} onchange="this.form.submit()">
+                        <label class="form-check-label" for="showPricesToggle">Show Prices on Public Profile</label>
+                    </div>
+                </form>
+
+                <hr class="mb-4">
+
+                <label class="form-label text-muted small fw-bold text-uppercase">Database Management</label>
+                <form action="{{ url_for('sync_db') }}" method="POST" class="mb-3">
+                    <button type="submit" class="btn btn-dark w-100 fw-bold py-2 shadow-sm">
+                        <i class="bi bi-arrow-repeat me-1"></i> Sync Master Database (API)
+                    </button>
+                    <small class="text-muted d-block text-center mt-1">Local Cache: {{ cache_count }} Master Cards</small>
+                </form>
+
+                <label class="form-label text-muted small fw-bold text-uppercase">Manual API Inject</label>
+                <form action="{{ url_for('force_api_fetch') }}" method="POST" class="mb-4">
+                    <div class="input-group">
+                        <input type="text" name="api_id" class="form-control border-dark" placeholder="e.g. swsh8-157" required>
+                        <button class="btn btn-dark fw-bold" type="submit">Inject ID</button>
+                    </div>
+                    <small class="text-muted mt-1 d-block">Force fetch a specific card by its exact API ID.</small>
+                </form>
+
+                <label class="form-label text-muted small fw-bold text-uppercase">Force Database Variant</label>
+                <form action="{{ url_for('force_variant') }}" method="POST" class="mb-4">
+                    <div class="input-group mb-2">
+                        <span class="input-group-text bg-dark text-white border-dark">ID</span>
+                        <input type="text" name="api_id" class="form-control border-dark" placeholder="e.g. neo4-6" required>
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark text-white border-dark">Variant</span>
+                        <input type="text" name="new_finish" class="form-control border-dark" placeholder="e.g. 1st Edition" required>
+                        <button class="btn btn-warning fw-bold" type="submit">Update</button>
+                    </div>
+                    <small class="text-muted mt-1 d-block">Manually append a missing variant.</small>
+                </form>
+
+                <form action="{{ url_for('link_orphans') }}" method="POST">
+                    <button type="submit" class="btn btn-outline-primary w-100 fw-bold">
+                        <i class="bi bi-link-45deg me-1"></i> Link Orphaned Inventory
+                    </button>
+                </form>
+
+            </div>
         </div>
     </div>
 </div>
@@ -246,7 +256,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title fw-bold">➕ Add to Inventory</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-plus-lg me-2"></i>Add to Inventory</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
@@ -259,11 +269,6 @@
                 <div class="tab-content p-4">
                     <div class="tab-pane fade show active" id="tabManual">
                         <form action="{{ url_for('add_card') }}" method="POST" class="row g-3">
-                            <div class="col-md-12 mb-2 position-relative">
-                                <label class="form-label text-primary fw-bold">🔎 Search Dictionary (Type 3+ letters)</label>
-                                <input type="text" id="liveSearch" class="form-control form-control-lg" placeholder="e.g. 'Charizard Base'..." autocomplete="off">
-                                <div id="searchResults" class="list-group position-absolute w-100 shadow" style="z-index: 1055; display:none;"></div>
-                            </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label text-muted small fw-bold text-uppercase">Card Name</label>
@@ -308,37 +313,10 @@
                             <div class="col-md-2">
                                 <label class="form-label text-muted small fw-bold text-uppercase">Destination</label>
                                 <select name="status" class="form-select border-success">
-                                    <option value="Personal" selected>Binder</option>
+                                    <option value="personal_collection" selected>Binder</option>
                                     <option value="Sales">Sales</option>
                                 </select>
                             </div>
-
-                            <div class="col-12 mt-3">
-                                <div class="form-check form-switch mb-2">
-                                    <input class="form-check-input" type="checkbox" id="isGradedToggle" name="is_graded">
-                                    <label class="form-check-label fw-bold text-danger" for="isGradedToggle">Is this a Graded Slab?</label>
-                                </div>
-                                
-                                <div class="row g-2 d-none p-3 bg-dark rounded border border-danger" id="gradedFields">
-                                    <div class="col-md-4">
-                                        <select name="grading_company" class="form-select">
-                                            <option value="PSA">PSA</option>
-                                            <option value="CGC">CGC</option>
-                                            <option value="BGS">BGS</option>
-                                            <option value="TAG">TAG</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <input type="text" name="grade" class="form-control" placeholder="Grade (e.g. 10, 9.5)">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <input type="text" name="cert_number" class="form-control" placeholder="Cert # (Optional)">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <input type="hidden" id="inputImage" name="image_url">
-                            <input type="hidden" name="game" value="Pokemon TCG">
                             
                             <div class="col-12 mt-4 text-end">
                                 <button type="submit" class="btn btn-danger btn-lg px-5 w-100 w-md-auto fw-bold shadow-sm">Save Card</button>
@@ -360,7 +338,6 @@
                             <div class="mb-3">
                                 <label class="form-label fw-bold">Upload Spreadsheet (.csv)</label>
                                 <input type="file" name="file" class="form-control form-control-lg" required accept=".csv">
-                                <div class="form-text mt-2">Ensure columns exist for Card Name, Set, Card Number, Quantity, and Finish.</div>
                             </div>
                             <button class="btn btn-dark px-4 w-100 w-md-auto fw-bold" type="submit">Upload File</button>
                         </form>
@@ -370,222 +347,97 @@
         </div>
     </div>
 </div>
-
-<div class="modal fade" id="toolsModal" tabindex="-1">
-    </div>
-
-{% for card in inventory %}
-<div class="modal fade" id="editModal{{ card.id }}" tabindex="-1">
-    </div>
-{% endfor %}
-
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    
-    // --- MOBILE DRILL DOWN INTERACTION ---
-    const inventoryBody = document.getElementById('inventoryBody');
-    if(inventoryBody) {
-        inventoryBody.addEventListener('click', function(e) {
-            // Only trigger on mobile view where our CSS grid is active
-            if (window.innerWidth >= 768) return;
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('inventoryApp', () => ({
+            searchQuery: '',
+            filterStatus: '',      // NEW
+            filterCondition: '',   // NEW
+            selectedCards: [],
+            totalCards: parseInt('{{ inventory|length or 0 }}'),
             
-            const row = e.target.closest('.inventory-row');
-            if (!row) return;
+            activeEditCard: { id: '', name: '', condition: '', price: '' },
+            editModalInstance: null,
 
-            // Prevent drill down when explicitly interacting with inputs/buttons
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) {
-                return;
-            }
+            init() {
+                this.editModalInstance = new bootstrap.Modal(document.getElementById('globalEditModal'));
+            },
 
-            // Toggle expanded view
-            row.classList.toggle('is-expanded');
-        });
-    }
+            // REPLACED matchesSearch WITH THIS:
+            isVisible(name, set, status, condition) {
+                // 1. Check text search
+                let matchesText = true;
+                if (this.searchQuery !== '') {
+                    const terms = this.searchQuery.toLowerCase().split(' ');
+                    const text = name + " " + set;
+                    matchesText = terms.every(term => text.includes(term));
+                }
 
+                // 2. Check dropdown filters
+                const matchesStatus = this.filterStatus === '' || status === this.filterStatus;
+                const matchesCondition = this.filterCondition === '' || condition === this.filterCondition;
 
-// --- CLIENT-SIDE PRICE UPDATER ---
-async function updateAllPrices() {
-    const searchVal = document.getElementById('adminSearch').value;
-    const msg = searchVal 
-        ? "Update prices for currently filtered cards?" 
-        : "This will fetch latest prices for ALL cards. Proceed?";
-        
-    if(!confirm(msg)) return;
-    
-    // Close modal to see progress
-    const toolsModal = bootstrap.Modal.getInstance(document.getElementById('toolsModal'));
-    if(toolsModal) toolsModal.hide();
+                // Card only shows if ALL active filters match
+                return matchesText && matchesStatus && matchesCondition;
+            },
 
-    const rows = Array.from(document.querySelectorAll('.inventory-row')).filter(r => r.style.display !== 'none');
-    if(rows.length === 0) return;
-    
-    const container = document.getElementById('priceProgressContainer');
-    const bar = document.getElementById('priceProgressBar');
-    container.classList.remove('d-none');
-    
-    let processed = 0;
-    let successCount = 0;
-    
-    for (const row of rows) {
-        const id = row.dataset.id;
-        try {
-            const res = await fetch(`/admin/update_price/${id}`, { method: 'POST' });
-            const data = await res.json();
+            get visibleCount() {
+                if (this.searchQuery === '' && this.filterStatus === '' && this.filterCondition === '') return this.totalCards;
+                return document.querySelectorAll('tbody tr[style*="display: none"]').length ? 'Filtered' : '...';
+            },
             
-            if(data.success) {
-                const priceCell = row.querySelector('.price-cell');
-                priceCell.innerHTML = `$${data.new_price.toFixed(2)}`;
-                priceCell.classList.add('bg-success', 'text-white');
-                
-                const dateCell = row.querySelector('.date-cell');
-                const today = new Date();
-                dateCell.innerText = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                dateCell.classList.add('fw-bold', 'text-body');
-                
-                setTimeout(() => priceCell.classList.remove('bg-success', 'text-white'), 1000);
-                successCount++;
-            }
-        } catch(e) { console.error("Update failed", e); }
-        
-        processed++;
-        bar.style.width = Math.round((processed / rows.length) * 100) + "%";
-        bar.innerText = `${processed} / ${rows.length}`;
-    }
-    setTimeout(() => { alert(`Updated ${successCount} cards.`); container.classList.add('d-none'); }, 500);
-}
+            // ... the rest of your toggleAll, openEditModal, and saveCard functions remain exactly the same ...
 
-document.addEventListener('DOMContentLoaded', function() {
-    
-    // --- LIVE SEARCH (Autocomplete) ---
-    const searchInput = document.getElementById('liveSearch');
-    const resultsDiv = document.getElementById('searchResults');
-    let debounceTimer;
+            get visibleCount() {
+                if (this.searchQuery === '') return this.totalCards;
+                return document.querySelectorAll('tbody tr[style*="display: none"]').length ? 'Filtered' : '...';
+            },
 
-    if(searchInput) {
-        searchInput.addEventListener('input', function() {
-            clearTimeout(debounceTimer);
-            if (this.value.length < 3) { resultsDiv.style.display = 'none'; return; }
-            debounceTimer = setTimeout(() => {
-                fetch(`/api/search_reference?q=${encodeURIComponent(this.value)}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        resultsDiv.innerHTML = '';
-                        if(data.length > 0) {
-                            data.forEach(item => {
-                                const a = document.createElement('a');
-                                a.className = 'list-group-item list-group-item-action text-body pointer';
-                                a.innerHTML = `<strong>${item.name}</strong> <small class='text-muted'>${item.set} #${item.number}</small>`;
-                                a.onclick = function() {
-                                    document.getElementById('inputName').value = item.name;
-                                    document.getElementById('inputSet').value = item.set;
-                                    document.getElementById('inputNumber').value = item.number;
-                                    document.getElementById('inputImage').value = item.image || '';
-                                    resultsDiv.style.display = 'none'; searchInput.value = '';
-                                };
-                                resultsDiv.appendChild(a);
-                            });
-                            resultsDiv.style.display = 'block';
-                        } else { resultsDiv.style.display = 'none'; }
+            toggleAll(e) {
+                if (e.target.checked) {
+                    const visibleBoxes = Array.from(document.querySelectorAll('input[name="card_ids"]:not([style*="display: none"])'));
+                    this.selectedCards = visibleBoxes.map(box => box.value);
+                } else {
+                    this.selectedCards = [];
+                }
+            },
+
+            openEditModal(cardData) {
+                this.activeEditCard = { ...cardData }; 
+                this.editModalInstance.show();
+            },
+
+            async saveCard(actionType) {
+                try {
+                    const response = await fetch(`/update_card/${this.activeEditCard.id}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            action: actionType,
+                            condition: this.activeEditCard.condition,
+                            price: this.activeEditCard.price
+                        })
                     });
-            }, 300);
-        });
-        document.addEventListener('click', e => { if(e.target !== searchInput) resultsDiv.style.display = 'none'; });
-    }
 
-    // --- ADVANCED TABLE FILTERING & COLUMNS ---
-    const rows = Array.from(document.querySelectorAll('.inventory-row'));
-    const adminSearch = document.getElementById('adminSearch');
-    const filterGame = document.getElementById('filterGame');
-    const filterSet = document.getElementById('filterSet');
-    const visibleCountEl = document.getElementById('visibleCount');
+                    const data = await response.json();
 
-    const uniqueGames = new Set(); const uniqueSets = new Set();
-    rows.forEach(row => { if(row.dataset.game) uniqueGames.add(row.dataset.game); if(row.dataset.set) uniqueSets.add(row.dataset.set); });
-    Array.from(uniqueGames).sort().forEach(g => filterGame.add(new Option(g, g)));
-    Array.from(uniqueSets).sort().forEach(s => filterSet.add(new Option(s, s)));
-
-    function applyFilters() {
-        const sVal = adminSearch.value.toLowerCase().trim();
-        const searchTerms = sVal.split(' ').filter(t => t !== ''); // Split into array of words
-        const gVal = filterGame.value;
-        const setVal = filterSet.value;
-        
-        let vCount = 0;
-        rows.forEach(row => {
-            const rowText = (row.dataset.name + " " + row.dataset.set).toLowerCase();
-            
-            // The row must include EVERY typed word to be considered a match
-            const matchesText = searchTerms.every(term => rowText.includes(term));
-            
-            const match = matchesText &&
-                          (gVal === "" || row.dataset.game === gVal) &&
-                          (setVal === "" || row.dataset.set === setVal);
-                          
-            if(match) { 
-                row.style.display = ''; 
-                vCount++; 
-            } else { 
-                row.style.display = 'none'; 
-                const cb = row.querySelector('.card-checkbox'); 
-                if(cb) cb.checked = false; 
+                    if (data.success) {
+                        this.editModalInstance.hide();
+                        window.location.reload(); 
+                    } else {
+                        alert("Error saving card: " + data.error);
+                    }
+                } catch (error) {
+                    console.error("Fetch error:", error);
+                    alert("A network error occurred.");
+                }
             }
-        });
-        visibleCountEl.innerText = vCount; 
-        updateBulk();
-    }
-
-    [adminSearch, filterGame, filterSet].forEach(el => { if(el) el.addEventListener('input', applyFilters); });
-
-    // --- COLUMN TOGGLES ---
-    const columns = [
-        { id: 'col-number', label: 'Card #', show: true }, { id: 'col-set', label: 'Set', show: true },
-        { id: 'col-game', label: 'Game', show: false }, { id: 'col-status', label: 'Status', show: true },
-        { id: 'col-finish', label: 'Finish', show: true }, { id: 'col-cond', label: 'Condition', show: true },
-        { id: 'col-slab', label: 'Graded Info', show: false }, { id: 'col-loc', label: 'Location', show: false },
-        { id: 'col-price', label: 'Price', show: true }, { id: 'col-updated', label: 'Date Updated', show: false }
-    ];
-
-    const colMenu = document.getElementById('columnToggleContainer');
-    columns.forEach(col => {
-        const div = document.createElement('div');
-        div.className = 'form-check form-switch mb-2';
-        div.innerHTML = `<input class="form-check-input col-toggle" type="checkbox" id="toggle-${col.id}" data-target="${col.id}" ${col.show ? 'checked' : ''}>
-                         <label class="form-check-label fw-bold" for="toggle-${col.id}">${col.label}</label>`;
-        colMenu.appendChild(div);
-        if(!col.show) document.querySelectorAll(`.${col.id}`).forEach(el => el.style.display = 'none');
+        }));
     });
-
-    document.querySelectorAll('.col-toggle').forEach(t => t.addEventListener('change', function() {
-        const cls = this.dataset.target;
-        document.querySelectorAll(`.${cls}`).forEach(el => el.style.display = this.checked ? '' : 'none');
-    }));
-
-    // --- BULK UI ---
-    const cbs = document.querySelectorAll('.card-checkbox'), bulkBar = document.getElementById('bulkActionBar');
-    const selCount = document.getElementById('selectedCount'), masterCb = document.getElementById('selectAll');
-    
-    function updateBulk() {
-        const c = document.querySelectorAll('.card-checkbox:checked').length;
-        selCount.innerText = c;
-        if(c > 0) bulkBar.classList.remove('d-none'); else bulkBar.classList.add('d-none');
-    }
-    
-    cbs.forEach(cb => cb.addEventListener('change', updateBulk));
-    
-    if(masterCb) {
-        masterCb.addEventListener('change', function() {
-            Array.from(document.querySelectorAll('.inventory-row')).filter(r => r.style.display !== 'none')
-                 .forEach(r => { const cb = r.querySelector('.card-checkbox'); if(cb) cb.checked = masterCb.checked; });
-            updateBulk();
-        });
-    }
-    
-    window.clearSelection = function() {
-        cbs.forEach(cb => cb.checked = false); if(masterCb) masterCb.checked = false; updateBulk();
-    }
-});
 </script>
 {% endblock %}

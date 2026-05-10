@@ -1,95 +1,253 @@
 {% extends "base.html" %}
-{% block title %}{{ species }} - Pokedex{% endblock %}
+{% block title %}{{ species }} Binder{% endblock %}
+
+{% block styles %}
+<style>
+    /* The Core Binder Layout */
+    .binder-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 1.5rem;
+        padding: 1rem 0;
+    }
+
+    /* Mobile adjustment for smaller screens */
+    @media (max-width: 576px) {
+        .binder-grid {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+    }
+
+    .tcg-card-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .tcg-card-img {
+        width: 100%;
+        max-width: 250px;
+        border-radius: 4.75% / 3.5%; /* Standard Pokemon card corner radius */
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease;
+    }
+
+    /* Interactive Hover */
+    .tcg-card-img:hover {
+        transform: translateY(-5px) scale(1.05);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+        cursor: pointer;
+    }
+
+    /* The "Silhouette" state for missing cards */
+    .not-owned .tcg-card-img {
+        opacity: 0.5;
+        filter: grayscale(100%);
+    }
+
+    .not-owned .tcg-card-img:hover {
+        opacity: 0.8;
+        filter: grayscale(50%);
+    }
+
+    /* Variant Tracking Badges */
+    .variant-badges {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+    }
+    
+    .badge-variant {
+        font-size: 0.65rem;
+        opacity: 0.4;
+        transition: opacity 0.3s ease, background-color 0.3s ease;
+    }
+    
+    .badge-variant.owned {
+        opacity: 1;
+        background-color: var(--bs-success) !important;
+        color: white !important;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container py-4">
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <a href="{{ url_for('pokedex_hub') }}" class="text-decoration-none text-muted mb-2 d-inline-block">&larr; Back to Hub</a>
-            <h1 class="fw-bold mb-0">📕 {{ species }} Collection</h1>
+            <h1 class="fw-bold mb-0">{{ species }} Master Set</h1>
+            <p class="text-muted">Total Master Cards: {{ master_cards|length }}</p>
         </div>
-        <a href="{{ url_for('hunt_mode', species=species) }}" class="btn btn-danger btn-lg fw-bold shadow-sm w-100 text-center" style="max-width: 300px;">🎯 HUNT MODE</a>
+        <a href="{{ url_for('pokedex_hub') }}" class="btn btn-outline-dark">← Back to Hub</a>
     </div>
 
-    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-4">
-        {% for ref in master_cards %}
-            <div class="col">
-                <div class="card h-100 border-0 shadow-sm bg-dark text-white">
-                    <img src="{{ ref.image_url }}" class="card-img-top p-2 img-fluid mx-auto" style="border-radius: 15px; max-height: 350px; object-fit: contain;">
-                    <div class="card-body text-center pt-2">
-                        <p class="text-muted small mb-2 fw-bold">{{ ref.set_name }} (#{{ ref.number }})</p>
-                        
-                        <div class="d-flex flex-wrap justify-content-center gap-2">
-                            {% for finish in ref.available_finishes.split(',') %}
-                                {% set ns = namespace(owned=false) %}
-                                {% for oc in owned_dict.get(ref.id, []) %}
-                                    {% if oc.finish|lower == finish.strip()|lower %}{% set ns.owned = true %}{% endif %}
-                                {% endfor %}
+    <div class="binder-grid">
+        {% for master in master_cards %}
+            
+            {# Check if the user owns ANY variant of this card #}
+            {% set is_owned = master.id in owned_dict %}
+            {% set owned_finishes = owned_dict.get(master.id, []) %}
 
-                                {% if ns.owned %}
-                                    <span class="badge shadow-sm bg-success py-2 px-3" style="font-size: 0.75rem;">
-                                        ✅ {{ finish.strip() }}
-                                    </span>
-                                {% else %}
-                                    <form action="{{ url_for('quick_capture') }}" method="POST" class="m-0 p-0 quick-capture-form">
-                                        <input type="hidden" name="reference_id" value="{{ ref.id }}">
-                                        <input type="hidden" name="finish" value="{{ finish.strip() }}">
-                                        <button type="submit" class="badge shadow-sm bg-dark border border-secondary text-secondary py-2 px-3" style="font-size: 0.75rem; cursor: pointer;" title="Click to add to inventory!">
-                                            ❌ {{ finish.strip() }}
-                                        </button>
-                                    </form>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
+            <div class="tcg-card-wrapper {% if not is_owned %}not-owned{% endif %}" id="wrapper-{{ master.id }}">
+                <img src="{{ master.image_url }}" alt="{{ master.name }}" class="tcg-card-img" loading="lazy" data-bs-toggle="modal" data-bs-target="#cardModal{{ master.id }}">
+                
+                <div class="mt-2 w-100">
+                    <div class="fw-bold text-truncate" style="font-size: 0.9rem;">{{ master.name }}</div>
+                    <div class="text-muted d-flex justify-content-between px-2" style="font-size: 0.75rem;">
+                        <span>{{ master.expansion_set.name }}</span>
+                        <span>#{{ master.card_number }}</span>
                     </div>
+                </div>
+
+                <div class="variant-badges w-100">
+                    {% if master.variant_type %}
+                        {% set available_finishes = master.variant_type.split(',') %}
+                        {% for finish in available_finishes %}
+                            {% set clean_finish = finish.strip() %}
+                            <span class="badge bg-secondary badge-variant {% if clean_finish.lower() in owned_finishes %}owned{% endif %}" data-master="{{ master.id }}" data-finish="{{ clean_finish.lower() }}">
+                                {{ clean_finish }}
+                            </span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="badge bg-secondary badge-variant {% if 'normal' in owned_finishes %}owned{% endif %}" data-master="{{ master.id }}" data-finish="normal">Normal</span>
+                    {% endif %}
                 </div>
             </div>
         {% endfor %}
     </div>
 </div>
+
+{% for master in master_cards %}
+<div class="modal fade" id="cardModal{{ master.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold">{{ master.name }} <small class="text-muted fs-6 ms-2">#{{ master.card_number }}</small></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <div class="modal-body text-center p-4">
+                <img src="{{ master.image_url }}" alt="{{ master.name }}" class="img-fluid rounded shadow mb-3" style="max-height: 250px;">
+                <p class="text-muted fw-bold mb-4">{{ master.expansion_set.name }}</p>
+
+                <div class="bg-body-secondary p-3 rounded">
+                    <h6 class="fw-bold text-uppercase text-muted small mb-3">⚡ Quick Add to Binder</h6>
+                    
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        {% if master.variant_type %}
+                            {% set available_finishes = master.variant_type.split(',') %}
+                            {% for finish in available_finishes %}
+                                {% set clean_finish = finish.strip() %}
+                                <form action="{{ url_for('quick_capture') }}" method="POST" class="d-inline quick-add-form">
+                                    <input type="hidden" name="master_id" value="{{ master.id }}">
+                                    <input type="hidden" name="finish" value="{{ clean_finish }}">
+                                    <button type="submit" class="btn btn-outline-success fw-bold shadow-sm">➕ {{ clean_finish }}</button>
+                                </form>
+                            {% endfor %}
+                        {% else %}
+                            <form action="{{ url_for('quick_capture') }}" method="POST" class="d-inline quick-add-form">
+                                <input type="hidden" name="master_id" value="{{ master.id }}">
+                                <input type="hidden" name="finish" value="Normal">
+                                <button type="submit" class="btn btn-outline-success fw-bold shadow-sm">➕ Normal</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const captureForms = document.querySelectorAll('.quick-capture-form');
+    // Select all our newly classed Quick Add forms
+    const quickAddForms = document.querySelectorAll('.quick-add-form');
 
-    captureForms.forEach(form => {
+    quickAddForms.forEach(form => {
         form.addEventListener('submit', async function(e) {
+            // Stop the page from reloading
             e.preventDefault();
 
-            const btn = form.querySelector('button');
+            const btn = this.querySelector('button');
             const originalText = btn.innerHTML;
-            const finishName = form.querySelector('input[name="finish"]').value;
             
+            // Change button state to show it's working
             btn.innerHTML = '⏳ Saving...';
             btn.disabled = true;
 
+            const formData = new FormData(this);
+            const masterId = formData.get('master_id');
+            const finish = formData.get('finish').toLowerCase();
+
             try {
-                const response = await fetch(form.action, {
+                // Send the data silently in the background
+                const response = await fetch(this.action, {
                     method: 'POST',
-                    body: new FormData(form),
+                    body: formData,
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
 
-                if (response.ok) {
-                    btn.classList.remove('bg-dark', 'border', 'border-secondary', 'text-secondary');
-                    btn.classList.add('bg-success', 'text-white');
-                    btn.innerHTML = `✅ ${finishName}`;
-                    btn.style.cursor = 'default';
-                } else {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                    alert("Failed to capture card. Please try again.");
+                const data = await response.json();
+
+                if(data.success) {
+                    // 1. Give satisfying visual feedback on the button
+                    btn.innerHTML = '✅ Added!';
+                    btn.classList.replace('btn-outline-success', 'btn-success');
+                    
+                    // 2. Remove the greyscale filter from the card in the main grid
+                    const wrapper = document.getElementById(`wrapper-${masterId}`);
+                    if (wrapper) {
+                        wrapper.classList.remove('not-owned');
+                    }
+
+                    // 3. Light up the specific variant badge on the main grid
+                    const targetBadge = document.querySelector(`.badge-variant[data-master="${masterId}"][data-finish="${finish}"]`);
+                    if (targetBadge) {
+                        targetBadge.classList.add('owned');
+                    }
+
+                    // 4. Find the modal that this form lives inside
+                    const modalElement = form.closest('.modal');
+
+                    // 5. Wait a split second so they see the success, then close it
+                    setTimeout(() => {
+                        if (modalElement) {
+                            const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                            if (modalInstance) {
+                                modalInstance.hide();
+                            }
+                        }
+                        
+                        // Reset the button silently in the background after it closes
+                        setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.classList.replace('btn-success', 'btn-outline-success');
+                            btn.disabled = false;
+                        }, 500);
+
+                    }, 800); // 800ms delay before closing
                 }
             } catch (error) {
-                console.error('Error:', error);
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                console.error("Error saving card:", error);
+                btn.innerHTML = '❌ Error';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 2000);
             }
         });
     });
 });
 </script>
-{% endblock %}
 {% endblock %}
