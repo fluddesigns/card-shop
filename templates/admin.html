@@ -232,6 +232,23 @@
                     <small class="text-muted mt-1 d-block">Force fetch a specific card by its exact API ID.</small>
                 </form>
 
+                <label class="form-label text-muted small fw-bold text-uppercase mt-3">Import WC Master Data</label>
+                <form action="{{ url_for('import_wc_master') }}" method="POST" enctype="multipart/form-data" class="mb-4">
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <input type="text" name="set_name" class="form-control border-dark" placeholder="Set (e.g. 2004 WC)" required>
+                        </div>
+                        <div class="col-6">
+                            <input type="text" name="deck_name" class="form-control border-dark" placeholder="Deck (e.g. Queendom)" required>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <input type="file" name="file" class="form-control border-dark" accept=".csv" required>
+                        <button class="btn btn-warning fw-bold" type="submit">Ingest CSV</button>
+                    </div>
+                    <small class="text-muted mt-1 d-block">Upload a TCGPlayer CSV dump to populate missing World Championship master entries.</small>
+                </form>
+
                 <label class="form-label text-muted small fw-bold text-uppercase">Force Database Variant</label>
                 <form action="{{ url_for('force_variant') }}" method="POST" class="mb-4">
                     <div class="input-group mb-2">

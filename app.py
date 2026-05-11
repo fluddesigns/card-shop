@@ -102,7 +102,8 @@ class StorefrontSettings(db.Model):
 class MasterTracker(db.Model):
     """Tracks the umbrella species you are hunting (e.g. 'Meowth') to group all wildcards."""
     id = db.Column(db.Integer, primary_key=True)
-    species_name = db.Column(db.String(50), unique=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # <-- Added this
+    species_name = db.Column(db.String(50), nullable=False) # <-- Removed unique=True
 
 class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -123,6 +124,9 @@ class ExpansionSet(db.Model):
     set_code = db.Column(db.String(20), unique=True, nullable=False)
     release_date = db.Column(db.Date, nullable=True)
     total_cards = db.Column(db.Integer, nullable=True)
+
+    # NEW: Flag to filter out non-sanctioned prints if needed later
+    is_world_champ = db.Column(db.Boolean, default=False)
     
     # Relationship: One Set has many Master Cards
     cards = db.relationship('MasterCard', backref='expansion_set', lazy=True, cascade="all, delete-orphan")
@@ -135,6 +139,10 @@ class MasterCard(db.Model):
     
     name = db.Column(db.String(150), nullable=False)
     card_number = db.Column(db.String(20), nullable=False)
+
+    # NEW: Resolves the multi-deck collision (e.g., "Queendom", "Jason Klaczynski")
+    deck_name = db.Column(db.String(100), nullable=True)
+
     rarity = db.Column(db.String(50), nullable=True)
     card_type = db.Column(db.String(50), nullable=True)
     variant_type = db.Column(db.String(50), nullable=True) # e.g., Normal, Reverse Holo, 1st Edition
@@ -527,6 +535,7 @@ def search_reference():
     
     data = []
     for card in results:
+        deck_str = f" [{card.deck_name}]" if card.deck_name else ""
         data.append({
             'id': card.id,
             'name': card.name,
@@ -1104,6 +1113,73 @@ def add_card():
         
     return redirect(url_for('admin'))
 
+@app.route('/admin/import_wc_master', methods=['POST'])
+@super_user_required
+def import_wc_master():
+    if 'file' not in request.files: 
+        return redirect(url_for('admin'))
+        
+    file = request.files['file']
+    set_name = request.form.get('set_name', '').strip()
+    deck_name = request.form.get('deck_name', '').strip()
+    
+    if not set_name or not deck_name or file.filename == '':
+        flash("Missing Set Name, Deck Name, or File.", "error")
+        return redirect(url_for('admin'))
+        
+    try:
+        df = pd.read_csv(file)
+        # Normalize column headers to lowercase
+        col_map = {c.lower().strip(): c for c in df.columns}
+        
+        # 1. Create or Find the WC Expansion Set
+        db_set = ExpansionSet.query.filter_by(name=set_name).first()
+        if not db_set:
+            db_set = ExpansionSet(
+                name=set_name,
+                series="World Championship",
+                set_code=f"WC-{set_name[:4]}", # e.g. WC-2004
+                is_world_champ=True
+            )
+            db.session.add(db_set)
+            db.session.flush()
+
+        count = 0
+        for _, row in df.iterrows():
+            # Grab relevant data based on typical TCGplayer CSV headers
+            c_name = str(row[col_map.get('name', 'Name')]).strip()
+            c_num = str(row[col_map.get('number', 'Number')]).strip()
+            tcg_id = str(row[col_map.get('productid', 'ProductId')]).strip()
+            
+            # Check for existing card to prevent duplicates
+            existing = MasterCard.query.filter_by(
+                set_id=db_set.id, 
+                card_number=c_num, 
+                name=c_name,
+                deck_name=deck_name
+            ).first()
+            
+            if not existing:
+                new_card = MasterCard(
+                    set_id=db_set.id,
+                    name=c_name,
+                    card_number=c_num,
+                    deck_name=deck_name,
+                    rarity="WC Replica",
+                    variant_type="Normal", # WC cards are typically non-holo replicas
+                    tcgplayer_id=tcg_id
+                )
+                db.session.add(new_card)
+                count += 1
+                
+        db.session.commit()
+        flash(f"✅ Successfully ingested {count} master cards for '{deck_name}' ({set_name}).")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error processing CSV: {str(e)}", "error")
+        
+    return redirect(url_for('admin'))
+
 @app.route('/paste_import', methods=['POST'])
 @login_required
 def paste_import():
@@ -1353,7 +1429,7 @@ def update_card(id):
 @app.route('/pokedex')
 @login_required
 def pokedex_hub():
-    trackers = MasterTracker.query.all()
+    trackers = MasterTracker.query.filter_by(user_id=current_user.id).all()
     stats = []
     
     for t in trackers:
@@ -1458,14 +1534,16 @@ def toggle_favorite():
     if not species_name:
         return redirect(url_for('pokedex_hub'))
         
-    existing = MasterTracker.query.filter_by(species_name=species_name).first()
+    # Check if THIS specific user is already tracking it
+    existing = MasterTracker.query.filter_by(user_id=current_user.id, species_name=species_name).first()
     
     if existing:
         db.session.delete(existing)
         db.session.commit()
         flash(f"Removed {species_name} from Master Sets.")
     else:
-        new_tracker = MasterTracker(species_name=species_name)
+        # Save the new tracker explicitly to THIS user
+        new_tracker = MasterTracker(user_id=current_user.id, species_name=species_name)
         db.session.add(new_tracker)
         db.session.commit()
         flash(f"Added {species_name} umbrella to Master Sets. Tracking all variants!")

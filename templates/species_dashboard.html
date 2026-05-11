@@ -86,6 +86,7 @@
                     <span class="input-group-text bg-body-secondary border-end-0"><i class="bi bi-arrow-down-up"></i></span>
                     <select class="form-select border-start-0 border-end-0" x-model="sortBy">
                         <option value="releaseIndex">Sort: Release Date</option>
+                        <option value="number">Sort: Card Number</option>
                         <option value="name">Sort: Name</option>
                         <option value="pct">Sort: Completion %</option>
                         <option value="missing">Sort: Missing Variants</option>
@@ -128,7 +129,7 @@
             {% set is_completely_owned = (missing_finishes|length == 0) %}
             {% set has_any_variant = (owned_finishes|length > 0) %}
 
-            <div x-show="isVisible('{{ master.name|lower|replace("'", "\\'") }}', '{{ master.expansion_set.name|lower|replace("'", "\\'") }}', {{ 'true' if is_completely_owned else 'false' }})"
+            <div x-show="isVisible('{{ master.name|lower|replace("'", "\\'") }}', '{{ master.expansion_set.name|lower|replace("'", "\\'") }}', '{{ master.card_number|string|lower|replace("'", "\\'") }}', {{ 'true' if is_completely_owned else 'false' }})"
                  x-transition
                  id="wrapper-{{ master.id }}"
                  class="{% if not has_any_variant %}not-owned{% endif %}"
@@ -186,6 +187,7 @@ const cardStats = [
             id: '{{ master.id }}',
             releaseIndex: {{ loop.index0 }}, // Preserves original DB release order
             name: '{{ master.name|lower|replace("'", "\\'") }}',
+            number: '{{ master.card_number|default("0", true)|replace("'", "\\'") }}', // Clean card number injection
             pct: {{ pct|round(2) }},
             missing: {{ missing_count }},
             owned: {{ owned_finishes|length }}
@@ -223,9 +225,17 @@ document.addEventListener('alpine:init', () => {
 
                 // Tie-breaker fallback
                 if (valA === valB) {
-                    return a.name.localeCompare(b.name);
+                    return a.name.localeCompare(b.name, undefined, { numeric: true });
                 }
 
+                // Custom Natural Sorting for Strings (Name and Card Number)
+                if (this.sortBy === 'number' || this.sortBy === 'name') {
+                    // Uses {numeric: true} so "2" comes before "10"
+                    let comparison = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+                    return this.sortDesc ? -comparison : comparison;
+                }
+
+                // Standard Numeric Sorting for everything else
                 if (this.sortDesc) {
                     return valA < valB ? 1 : -1;
                 } else {
@@ -241,11 +251,17 @@ document.addEventListener('alpine:init', () => {
             return orderMap;
         },
         
-        isVisible(name, set, isCompletelyOwned) {
+        isVisible(name, set, number, isCompletelyOwned) {
             let matchesText = true;
             if (this.searchQuery !== '') {
-                const text = (name + " " + set).toLowerCase();
-                matchesText = text.includes(this.searchQuery.toLowerCase());
+                // Split the search query by spaces just in case you ever type "rocket 107"
+                const terms = this.searchQuery.toLowerCase().trim().split(/\s+/);
+                
+                // Combine everything into one massive string that Alpine can search through
+                const text = (name + " " + set + " " + number).toLowerCase();
+                
+                // Ensure every word you typed exists in that combined string
+                matchesText = terms.every(term => text.includes(term));
             }
             
             const matchesSet = this.filterSet === '' || set.toLowerCase() === this.filterSet.toLowerCase();

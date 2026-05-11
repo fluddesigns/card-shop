@@ -33,8 +33,26 @@
                 <p class="text-muted mb-0">Track your progress across umbrella species.</p>
             </div>
             
-            <form action="{{ url_for('toggle_favorite') }}" method="POST" class="d-flex gap-2">
-                <input type="text" name="species_name" class="form-control border-primary" placeholder="e.g. Gengar" required>
+            <form action="{{ url_for('toggle_favorite') }}" method="POST" class="d-flex gap-2" x-data="pokedexAutocomplete()">
+                <div class="position-relative flex-grow-1">
+                    <input type="text" name="species_name" class="form-control border-primary w-100" placeholder="e.g. Gengar" required autocomplete="off"
+                           x-model="query"
+                           @input.debounce.300ms="fetchSuggestions"
+                           @click.outside="suggestions = []">
+                    
+                    <ul class="dropdown-menu w-100 shadow-lg" :class="suggestions.length > 0 ? 'show' : ''" style="position: absolute; top: 100%; left: 0; z-index: 1050; max-height: 250px; overflow-y: auto;">
+                        <template x-for="name in suggestions" :key="name">
+                            <li>
+                                <a class="dropdown-item py-2 border-bottom fw-bold" href="#" @click.prevent="selectSpecies(name)">
+                                    <i class="bi bi-search me-2 text-muted"></i><span x-text="name"></span>
+                                </a>
+                            </li>
+                        </template>
+                        <li x-show="suggestions.length === 0 && query.length >= 2" class="p-3 text-muted small text-center">
+                            No exact matches found.
+                        </li>
+                    </ul>
+                </div>
                 <button type="submit" class="btn btn-primary fw-bold px-4 text-nowrap"><i class="bi bi-plus-lg"></i> Track</button>
             </form>
         </div>
@@ -176,6 +194,36 @@ document.addEventListener('alpine:init', () => {
         isVisible(name) {
             if (this.searchQuery === '') return true;
             return name.includes(this.searchQuery.toLowerCase());
+        }
+    }));
+
+    Alpine.data('pokedexAutocomplete', () => ({
+        query: '',
+        suggestions: [],
+        
+        async fetchSuggestions() {
+            if (this.query.length < 2) {
+                this.suggestions = [];
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/search_reference?q=${encodeURIComponent(this.query)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // We only want the unique character names (e.g., 'Gengar', not 'Gengar (Fossil)')
+                    const uniqueNames = [...new Set(data.map(item => item.name))].slice(0, 8);
+                    this.suggestions = uniqueNames;
+                }
+            } catch (error) {
+                console.error("Failed to fetch species suggestions:", error);
+            }
+        },
+
+        selectSpecies(name) {
+            this.query = name;
+            this.suggestions = []; // Close the dropdown
         }
     }));
 });
