@@ -93,6 +93,9 @@
                                     {% if card.master_card.variant_type == '1st Edition' %}
                                         <span class="badge bg-warning text-dark ms-1">1st Ed</span>
                                     {% endif %}
+                                    {% if card.master_card.deck_name %}
+                                        <span class="badge bg-info text-dark ms-1"><i class="bi bi-trophy-fill"></i> {{ card.master_card.deck_name }}</span>
+                                    {% endif %}
                                 </td>
                                 <td><small class="text-muted">{{ card.master_card.expansion_set.name }}</small></td>
                                 <td><span class="badge {% if card.status == 'Sales' %}bg-success{% else %}bg-secondary{% endif %}">{{ card.status }}</span></td>
@@ -121,7 +124,12 @@
                             <div class="d-flex gap-3 align-items-start">
                                 <input type="checkbox" class="form-check-input mt-1" name="card_ids" value="{{ card.id }}" x-model="selectedCards" @click.stop>
                                 <div>
-                                    <div class="fw-bold fs-5 lh-1">{{ card.master_card.name }}</div>
+                                    <div class="fw-bold fs-5 lh-1">
+                                        {{ card.master_card.name }}
+                                        {% if card.master_card.deck_name %}
+                                            <span class="badge bg-info text-dark ms-1 fs-6"><i class="bi bi-trophy-fill"></i> {{ card.master_card.deck_name }}</span>
+                                        {% endif %}
+                                    </div>
                                     <div class="text-muted small mt-1">{{ card.master_card.expansion_set.name }} • #{{ card.master_card.card_number or '-' }}</div>
                                 </div>
                             </div>
@@ -231,7 +239,7 @@
                     </div>
                     <small class="text-muted mt-1 d-block">Force fetch a specific card by its exact API ID.</small>
                 </form>
-
+                
                 <label class="form-label text-muted small fw-bold text-uppercase mt-3">Import WC Master Data</label>
                 <form action="{{ url_for('import_wc_master') }}" method="POST" enctype="multipart/form-data" class="mb-4">
                     <div class="row g-2 mb-2">
@@ -306,7 +314,10 @@
                             <img :src="item.image || ''" style="width: 40px; height: 55px; object-fit: contain;" class="me-3 rounded bg-light">
                             <div>
                                 <div class="fw-bold" x-text="item.name"></div>
-                                <small class="text-muted"><span x-text="item.set"></span> • #<span x-text="item.number"></span></small>
+                                <small class="text-muted">
+                                    <span x-text="item.set"></span> • #<span x-text="item.number"></span>
+                                    <span x-show="item.deck_name" class="fw-bold text-info ms-1" x-text="'[' + item.deck_name + ']'"></span>
+                                </small>
                             </div>
                         </a>
                     </li>
@@ -456,7 +467,6 @@
             }
         }));
 
-
         Alpine.data('inventoryApp', () => ({
             searchQuery: '',
             filterStatus: '',      // NEW
@@ -471,7 +481,6 @@
                 this.editModalInstance = new bootstrap.Modal(document.getElementById('globalEditModal'));
             },
 
-            // REPLACED matchesSearch WITH THIS:
             isVisible(name, set, status, condition) {
                 // 1. Check text search
                 let matchesText = true;
@@ -491,13 +500,6 @@
 
             get visibleCount() {
                 if (this.searchQuery === '' && this.filterStatus === '' && this.filterCondition === '') return this.totalCards;
-                return document.querySelectorAll('tbody tr[style*="display: none"]').length ? 'Filtered' : '...';
-            },
-            
-            // ... the rest of your toggleAll, openEditModal, and saveCard functions remain exactly the same ...
-
-            get visibleCount() {
-                if (this.searchQuery === '') return this.totalCards;
                 return document.querySelectorAll('tbody tr[style*="display: none"]').length ? 'Filtered' : '...';
             },
 
@@ -543,38 +545,37 @@
                 }
             }
         }));
-        // Add this right below Alpine.data('inventoryApp', ...);
 
-    Alpine.data('addCardAutocomplete', () => ({
-        query: '',
-        selectedSet: '',
-        selectedNumber: '',
-        suggestions: [],
-        isGraded: false,
-        
-        async fetchSuggestions() {
-            if (this.query.length < 2) {
-                this.suggestions = [];
-                return;
-            }
+        Alpine.data('addCardAutocomplete', () => ({
+            query: '',
+            selectedSet: '',
+            selectedNumber: '',
+            suggestions: [],
+            isGraded: false,
             
-            try {
-                const response = await fetch(`/api/search_reference?q=${encodeURIComponent(this.query)}`);
-                if (response.ok) {
-                    this.suggestions = await response.json();
+            async fetchSuggestions() {
+                if (this.query.length < 2) {
+                    this.suggestions = [];
+                    return;
                 }
-            } catch (error) {
-                console.error("Failed to fetch card suggestions:", error);
-            }
-        },
+                
+                try {
+                    const response = await fetch(`/api/search_reference?q=${encodeURIComponent(this.query)}`);
+                    if (response.ok) {
+                        this.suggestions = await response.json();
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch card suggestions:", error);
+                }
+            },
 
-        selectCard(item) {
-            this.query = item.name;
-            this.selectedSet = item.set;
-            this.selectedNumber = item.number;
-            this.suggestions = []; // Close the dropdown
-        }
-    }));
+            selectCard(item) {
+                this.query = item.name;
+                this.selectedSet = item.set;
+                this.selectedNumber = item.number;
+                this.suggestions = []; // Close the dropdown
+            }
+        }));
     });
 </script>
 {% endblock %}
